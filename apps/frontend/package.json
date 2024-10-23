@@ -9,7 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@radix-ui/react-scroll-area": "^1.2.0",
     "@radix-ui/react-slot": "^1.1.0",
+    "@repo/db": "*",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.453.0",
@@ -17,11 +19,13 @@
     "next-auth": "^4.24.8",
     "react": "^18",
     "react-dom": "^18",
+    "react-hot-toast": "^2.4.1",
+    "react-lite-youtube-embed": "^2.4.0",
     "tailwind-merge": "^2.5.4",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "youtube-url": "^0.5.0"
   },
   "devDependencies": {
-    "@repo/db": "*",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

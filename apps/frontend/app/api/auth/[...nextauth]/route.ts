@@ -1,4 +1,5 @@
 import prismaClient from '@repo/db';
+import { DefaultSession } from 'next-auth';
 import NextAuth from "next-auth/next";
 import GoogleProvider from "next-auth/providers/google";
 
@@ -15,7 +16,7 @@ const handler = NextAuth({
             try {
                 if (!params.user.email) return false;
 
-                await prismaClient.user.upsert({
+                const user = await prismaClient.user.upsert({
                     where: { email: params.user.email },
                     update: {
                         name: params.user.name ?? ""
@@ -26,12 +27,22 @@ const handler = NextAuth({
                     }
                 });
 
+                params.user.id = user.id;
                 return true;
             } catch (error) {
                 console.log(error);
                 return false;
             }
         },
+        jwt: ({ token, user }: any) => {
+            return token;
+        },
+        session: ({ session, token }: any) => {
+            if (session && session.user) {
+                session.user.id = token.sub;
+            }
+            return session;
+        }
     }
 });
 
