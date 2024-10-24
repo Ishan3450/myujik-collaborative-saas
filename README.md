@@ -4,6 +4,8 @@ I developed a real-time music streaming platform where users can create a stream
 
 ## **Demo**
 
+https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
+
 ## **Table of Contents**
 
 - [**Myujik - Collaborate Streaming**](#myujik---collaborate-streaming)
