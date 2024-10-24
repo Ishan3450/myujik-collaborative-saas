@@ -1,6 +1,6 @@
 # **Myujik - Collaborate Streaming**
 
-I developed a real-time music streaming platform where users can create a stream room, invite others to join, and collaborate for the perfect playlist. Participants can suggest songs by sharing YouTube links and upvote their favorite additions. The queue dynamically updates based on upvotes, ensuring that the most popular songs rise to the top. The stream owner has the ability to play songs in the order of their popularity, being a collaborative and engaging listening experience. All interactions and updates happen in real-time using WebSockets, providing a seamless and interactive user experience.
+I developed a real-time music streaming platform where users can create a stream room, invite others to join, and collaborate for the perfect playlist. Participants can suggest songs by sharing YouTube links and upvote their favorite additions. The queue dynamically updates based on upvotes, ensuring that the most popular songs rise to the top. The stream owner has the ability to play songs in the order of their popularity, ensuring a collaborative and engaging listening experience. All interactions and updates happen in real-time using WebSockets, providing a seamless and interactive user experience.
 
 ## **Demo**
 
