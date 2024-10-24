@@ -1,81 +1,103 @@
-# Turborepo starter
+# **Myujik - Collaborate Streaming**
 
-This is an official starter Turborepo.
+I developed a real-time music streaming platform where users can create a stream room, invite others to join, and collaborate for the perfect playlist. Participants can suggest songs by sharing YouTube links and upvote their favorite additions. The queue dynamically updates based on upvotes, ensuring that the most popular songs rise to the top. The stream owner has the ability to play songs in the order of their popularity, being a collaborative and engaging listening experience. All interactions and updates happen in real-time using WebSockets, providing a seamless and interactive user experience.
 
-## Using this example
+## **Demo**
 
-Run the following command:
+## **Table of Contents**
 
-```sh
-npx create-turbo@latest
+- [**Myujik - Collaborate Streaming**](#myujik---collaborate-streaming)
+  - [**Demo**](#demo)
+  - [**Table of Contents**](#table-of-contents)
+  - [**Project Structure (Monorepo structure)**](#project-structure-monorepo-structure)
+  - [**Technologies Used**](#technologies-used)
+    - [**Frontend**](#frontend)
+  - [**Installation**](#installation)
+    - [**Cloning the Repository**](#cloning-the-repository)
+    - [**PackagesInstallation**](#packagesinstallation)
+    - [**Environment Variables**](#environment-variables)
+  - [**Usage**](#usage)
+    - [**Accessing the Application**](#accessing-the-application)
+  - [**Contact Information**](#contact-information)
+
+---
+
+## **Project Structure (Monorepo structure)**
+
+```plaintext
+./
+ │
+ ├── apps/
+ │   │
+ │   ├── frontend/              # Frontend in NextJS
+ │   └── websocket/             # Websocket Code
+ │
+ └── packages/
+     │
+     └── db/
+         ├── prisma/            # Prisma Model and Migrations
+         │   ├── migrations/    # Models' migrations
+         │   └── schema.prisma  # File defining the models of the database
+         │
+         └── index.ts           # Prisma Singleton Class
 ```
 
-## What's inside?
+---
 
-This Turborepo includes the following packages/apps:
+## **Technologies Used**
 
-### Apps and Packages
+### **Frontend**
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+- [Next.js](https://nextjs.org/) for full stack.
+- [Tailwind CSS](https://tailwindcss.com/) for styling.
+- [Shadcn/io](https://ui.shadcn.com/) for ui components.
+- [Next Auth](https://next-auth.js.org/) for in-house authentication.
+- [TypeScript](https://www.typescriptlang.org/) for strict type checking.
+- [Turborepo](https://turbo.build/) for mono repo and system build orchestrator.
+- [WS](https://www.npmjs.com/package/ws) for websocket communication.
+- [Prisma](https://www.prisma.io/) as ORM with PostgreSQL database.
+  
+---
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## **Installation**
 
-### Utilities
+### **Cloning the Repository**
 
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm build
+```bash
+git clone https://github.com/Ishan3450/myujik-collaborative-saas
 ```
 
-### Develop
+### **PackagesInstallation**
 
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm dev
+```bash
+cd /apps/websocket
+npm install
 ```
 
-### Remote Caching
+### **Environment Variables**
 
-Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+- `.env.example` files are there wherever needed in the folder.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup), then enter the following commands:
+---
 
-```
-cd my-turborepo
-npx turbo login
-```
+## **Usage**
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-npx turbo link
+- In the root folder run the command:
+  
+```bash
+turbo build
 ```
 
-## Useful Links
 
-Learn more about the power of Turborepo:
+### **Accessing the Application**
 
-- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
-- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
-- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
-- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
-- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
-- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)
+- Default Websocket Port: `ws://localhost:8080`.
+- Default Frontend Port: `http://localhost:3000`.
+
+---
+
+## **Contact Information**
+
+For any inquiries or feedback, feel free to reach out.
+
+- LinkedIn: [Ishan Jagani](https://www.linkedin.com/in/ishanjagani/)

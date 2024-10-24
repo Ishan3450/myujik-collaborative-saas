@@ -149,9 +149,19 @@ export default function MusicStream({
 
   const handlePlayNext = () => {
     if (songs.length > 0) {
-      const nextSong = songs[0];
+      const nextSong = sortedSongs[0];
       setCurrentlyPlaying(nextSong);
-      setSongs(songs.slice(1));
+      const newList = sortedSongs.slice(1);
+
+      ws.current?.send(
+        JSON.stringify({
+          type: "update_songs_list",
+          roomId: streamId,
+          songs: newList,
+        })
+      );
+    } else if (!songs.length && currentlyPlaying) {
+      setCurrentlyPlaying(null);
     }
   };
 
