@@ -13,24 +13,24 @@ model User {
   email         String    @unique
   isPremiumUser Boolean   @default(false)
   createdAt     DateTime? @default(now())
-  upvotes       Upvote[]
-  songs         Song[]
+  // upvotes       Upvote[]
+  // songs         Song[]
 }
 
-model Song {
-  id      String   @id @default(uuid())
-  url     String
-  userId  String
-  user    User     @relation(fields: [userId], references: [id])
-  upvotes Upvote[]
-}
+// model Song {
+//   id      String   @id @default(uuid())
+//   url     String
+//   userId  String
+//   user    User     @relation(fields: [userId], references: [id])
+//   upvotes Upvote[]
+// }
 
-model Upvote {
-  id     String @id @default(uuid())
-  songId String
-  userId String
-  song   Song   @relation(fields: [songId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+// model Upvote {
+//   id     String @id @default(uuid())
+//   songId String
+//   userId String
+//   song   Song   @relation(fields: [songId], references: [id])
+//   user   User   @relation(fields: [userId], references: [id])
 
-  @@unique([userId, songId])
-}
+//   @@unique([userId, songId])
+// }

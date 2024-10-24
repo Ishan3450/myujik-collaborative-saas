@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronUp, Share2, Play } from "lucide-react";
+import { ChevronUp, Share2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -30,20 +30,25 @@ type Message = {
   songs: Song[];
 };
 
-export default function MusicStream() {
+export default function MusicStream({
+  params,
+}: {
+  params: { streamId: string };
+}) {
+  const { streamId } = params;
+  const router = useRouter();
   const [songs, setSongs] = useState<Song[]>([]);
   const [youtubeLink, setYoutubeLink] = useState("");
   const [currentlyPlaying, setCurrentlyPlaying] = useState<Song | null>(null);
   const session: any = useSession();
   const ws = useRef<WebSocket | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     if (session.status === "loading" || ws.current) return;
 
     async function init() {
       if (session.status === "unauthenticated") {
-        toast.error("Unauthorized access !! Login to start stream");
+        toast.error("Unauthorized access !! Login first");
         router.push("/");
         return;
       }
@@ -53,8 +58,9 @@ export default function MusicStream() {
 
         ws.current?.send(
           JSON.stringify({
-            type: "owner_create_room",
+            type: "join_room",
             id: session.data?.user?.id,
+            roomId: streamId,
           })
         );
       }
@@ -113,7 +119,7 @@ export default function MusicStream() {
       ws.current?.send(
         JSON.stringify({
           type: "add_song",
-          roomId: session.data?.user?.id,
+          roomId: streamId,
           addedBy: session.data?.user?.name,
           extractedId: videoId,
         })
@@ -136,7 +142,7 @@ export default function MusicStream() {
       JSON.stringify({
         type: "update_songs_list",
         songs: newSongList,
-        roomId: session.data?.user?.id,
+        roomId: streamId,
       })
     );
   };
@@ -146,8 +152,6 @@ export default function MusicStream() {
       const nextSong = songs[0];
       setCurrentlyPlaying(nextSong);
       setSongs(songs.slice(1));
-    } else if (!songs.length && currentlyPlaying) {
-      setCurrentlyPlaying(null);
     }
   };
 
@@ -156,9 +160,8 @@ export default function MusicStream() {
   );
 
   function shareStream() {
-    const shareUrl = `${window.location.origin}/stream/${session.data?.user?.id}`;
     navigator.clipboard
-      .writeText(shareUrl)
+      .writeText(window.location.href)
       .then(() => {
         toast.success("Stream URL copied to clipboard!");
       })
@@ -173,7 +176,10 @@ export default function MusicStream() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left column: List of songs */}
         <Card className="p-4">
-          <h2 className="text-2xl font-bold mb-4">Song List</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold mb-4">Song List</h2>
+            <p className="text-gray-400 ">Stream: {streamId}</p>
+          </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
             {sortedSongs.map((song) => (
               <div
@@ -214,7 +220,7 @@ export default function MusicStream() {
         </Card>
 
         {/* Right column: Controls and currently playing */}
-        <div className="space-y-3">
+        <div className="space-y-6">
           <Card className="p-4">
             <h2 className="text-2xl font-bold mb-4">Add Song</h2>
             <div className="flex space-x-2">
@@ -234,37 +240,30 @@ export default function MusicStream() {
           </Card>
 
           <Card className="p-4">
-            <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
+            <h2 className="text-2xl font-bold mb-4">Currently Playing</h2>
             {currentlyPlaying ? (
-              <LiteYouTubeEmbed
-                id={currentlyPlaying.extractedId}
-                title={currentlyPlaying.extractedName}
-              />
+              <div className="flex items-center space-x-4">
+                <img
+                  src={currentlyPlaying.extractedThumbnail}
+                  alt={currentlyPlaying.extractedName}
+                  className="w-20 h-20 object-cover rounded"
+                />
+                <div>
+                  <h3 className="font-semibold">
+                    {currentlyPlaying.extractedName}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Added by {currentlyPlaying.addedBy}
+                  </p>
+                </div>
+              </div>
             ) : (
-              // <div className="flex items-center space-x-4">
-              //   <img
-              //     src={currentlyPlaying.extractedThumbnail}
-              //     alt={currentlyPlaying.extractedName}
-              //     className="w-20 h-20 object-cover rounded"
-              //   />
-              //   <div>
-              //     <h3 className="font-semibold">
-              //       {currentlyPlaying.extractedName}
-              //     </h3>
-              //     <p className="text-sm text-muted-foreground">
-              //       Added by {currentlyPlaying.addedBy}
-              //     </p>
-              //   </div>
-              // </div>
               <p>No song is currently playing</p>
             )}
           </Card>
 
           <div className="flex space-x-2">
-            <Button onClick={handlePlayNext} className="flex-1">
-              <Play className="mr-2 h-4 w-4" /> Play Next
-            </Button>
-            <Button variant="outline" className="flex-1" onClick={shareStream}>
+            <Button className="flex-1" onClick={shareStream}>
               <Share2 className="mr-2 h-4 w-4" /> Share Stream
             </Button>
           </div>

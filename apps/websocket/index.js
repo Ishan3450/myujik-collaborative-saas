@@ -61,6 +61,8 @@ wss.on("connection", (ws) => {
             // if exists then add the curr ws to the roomMap
             roomMap.get(parsed.roomId).add(ws);
 
+            if(!socketMap.has(parsed.id)) socketMap.set(parsed.id, ws);
+
             // send the song lists of the room
             ws.send(JSON.stringify({
                 type: "joined_room",
@@ -95,7 +97,7 @@ wss.on("connection", (ws) => {
         }
 
         // needs broadcat to all the room users
-        if (parsed.type === "owner_update_songs_list") {
+        if (parsed.type === "update_songs_list") {
             songsMap.set(parsed.roomId, parsed.songs);
             broadcastToRoomUsers(parsed.roomId);
         }
