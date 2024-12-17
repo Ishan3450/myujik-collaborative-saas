@@ -62,8 +62,8 @@ export default function MusicStream() {
     init();
 
     // return () => {
-    //   ws.current?.close();
-    //   ws.current = null;
+    // ws.current?.close();
+    // ws.current = null;
     // };
   }, [session]);
 
@@ -79,8 +79,8 @@ export default function MusicStream() {
         const message: Message = JSON.parse(event.data);
 
         if (message.type === "room_created") {
+          setSongs(message.songs);
           toast.success("Stream started");
-          setSongs([]);
         }
 
         if (message.type === "room_not_exist") {
@@ -96,7 +96,9 @@ export default function MusicStream() {
           setSongs([]);
           setCurrentlyPlaying(null);
           ws.current = null;
+          toast.success("Stream Ended");
           router.push("/");
+          leaveRoom();
         }
       };
 
@@ -104,6 +106,14 @@ export default function MusicStream() {
         ws.current = null;
       };
     });
+  }
+
+  const handleStreamEnd = () => {
+    ws.current?.send(JSON.stringify({
+      type: "owner_ended_stream",
+      roomId: session.data?.user?.id,
+      songs
+    }));
   }
 
   const handleAddSong = async () => {
@@ -126,9 +136,9 @@ export default function MusicStream() {
     const newSongList = songs.map((song) => {
       return song.extractedId === extractedId
         ? {
-            ...song,
-            votes: [...song.votes, session.data?.user?.id],
-          }
+          ...song,
+          votes: [...song.votes, session.data?.user?.id],
+        }
         : song;
     });
 
@@ -159,6 +169,14 @@ export default function MusicStream() {
     }
   };
 
+  const leaveRoom = () => {
+    ws.current?.send(JSON.stringify({
+      type: "leave_room",
+      roomId: session.data?.user?.id,
+      id: session.data?.user?.id
+    }));
+  }
+
   const sortedSongs = [...songs].sort(
     (a, b) => b.votes.length - a.votes.length
   );
@@ -181,7 +199,10 @@ export default function MusicStream() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left column: List of songs */}
         <Card className="p-4">
-          <h2 className="text-2xl font-bold mb-4">Song List</h2>
+          <div className="flex justify-between mb-4 items-end">
+            <h2 className="text-2xl font-bold">Songs List</h2>
+            <Button className="bg-red-600 text-white font-bold" variant={"outline"} onClick={handleStreamEnd}>End Stream</Button>
+          </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
             {sortedSongs.map((song) => (
               <div

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronUp, Share2 } from "lucide-react";
+import { ChevronUp, DoorOpen, DoorOpenIcon, Share2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -102,7 +102,7 @@ export default function MusicStream({
           setSongs([]);
           setCurrentlyPlaying(null);
           ws.current = null;
-          router.push("/");
+          leaveRoom();
         }
       };
 
@@ -132,9 +132,9 @@ export default function MusicStream({
     const newSongList = songs.map((song) => {
       return song.extractedId === extractedId
         ? {
-            ...song,
-            votes: [...song.votes, session.data?.user?.id],
-          }
+          ...song,
+          votes: [...song.votes, session.data?.user?.id],
+        }
         : song;
     });
 
@@ -147,23 +147,15 @@ export default function MusicStream({
     );
   };
 
-  const handlePlayNext = () => {
-    if (songs.length > 0) {
-      const nextSong = sortedSongs[0];
-      setCurrentlyPlaying(nextSong);
-      const newList = sortedSongs.slice(1);
-
-      ws.current?.send(
-        JSON.stringify({
-          type: "update_songs_list",
-          roomId: streamId,
-          songs: newList,
-        })
-      );
-    } else if (!songs.length && currentlyPlaying) {
-      setCurrentlyPlaying(null);
-    }
-  };
+  const leaveRoom = () => {
+    ws.current?.send(JSON.stringify({
+      type: "leave_room",
+      roomId: streamId,
+      id: session.data?.user?.id
+    }));
+    toast.success("Leaving stream")
+    router.push("/");
+  }
 
   const sortedSongs = [...songs].sort(
     (a, b) => b.votes.length - a.votes.length
@@ -186,8 +178,8 @@ export default function MusicStream({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left column: List of songs */}
         <Card className="p-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold mb-4">Song List</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Songs List</h2>
             <p className="text-gray-400 ">Stream: {streamId}</p>
           </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
@@ -274,7 +266,11 @@ export default function MusicStream({
 
           <div className="flex space-x-2">
             <Button className="flex-1" onClick={shareStream}>
-              <Share2 className="mr-2 h-4 w-4" /> Share Stream
+              <Share2 /> Share Stream
+            </Button>
+            <Button className="flex-1 border-red-400 text-red-600 hover:text-red-600" variant={"outline"} onClick={leaveRoom}>
+              <DoorOpenIcon />
+              Leave Stream
             </Button>
           </div>
         </div>
