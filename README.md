@@ -3,13 +3,20 @@
 I developed a real-time music streaming platform where users can create a stream room, invite others to join, and collaborate for the perfect playlist. Participants can suggest songs by sharing YouTube links and upvote their favorite additions. The queue dynamically updates based on upvotes, ensuring that the most popular songs rise to the top. The stream owner has the ability to play songs in the order of their popularity, ensuring a collaborative and engaging listening experience. All interactions and updates happen in real-time using WebSockets, providing a seamless and interactive user experience.
 
 ## **Demo**
+### Version 2
+https://github.com/user-attachments/assets/b71b604d-a9f1-41b6-929c-acf75ffbc839
 
+
+### Version 1
 https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
+
 
 ## **Table of Contents**
 
 - [**Myujik - Collaborate Streaming**](#myujik---collaborate-streaming)
   - [**Demo**](#demo)
+    - [Version 2](#version-2)
+    - [Version 1](#version-1)
   - [**Table of Contents**](#table-of-contents)
   - [**Project Structure (Monorepo structure)**](#project-structure-monorepo-structure)
   - [**Technologies Used**](#technologies-used)
@@ -34,14 +41,20 @@ https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
  │   ├── frontend/              # Frontend in NextJS
  │   └── websocket/             # Websocket Code
  │
+ ├── demo/                      # Version wise demos
+ │
  └── packages/
      │
-     └── db/
-         ├── prisma/            # Prisma Model and Migrations
-         │   ├── migrations/    # Models' migrations
-         │   └── schema.prisma  # File defining the models of the database
+     ├── db/
+     │    ├── prisma/            # Prisma Model and Migrations
+     │    │   ├── migrations/    # Models' migrations
+     │    │   └── schema.prisma  # File defining the models of the database
+     │    │
+     │    └── index.ts           # Prisma Singleton Class
+     │
+     └── redis-client/          # Redis cache
          │
-         └── index.ts           # Prisma Singleton Class
+         └── index.ts           # Redis Singleton Class
 ```
 
 ---
@@ -57,8 +70,8 @@ https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
 - [TypeScript](https://www.typescriptlang.org/) for strict type checking.
 - [Turborepo](https://turbo.build/) for mono repo and system build orchestrator.
 - [WS](https://www.npmjs.com/package/ws) for websocket communication.
-- [Prisma](https://www.prisma.io/) as ORM with PostgreSQL database.
-  
+- [Prisma](https://www.prisma.io/) as ORM with PostgreSQL database.  
+- [Redis](https://redis.io/) as cache.
 ---
 
 ## **Installation**
@@ -88,6 +101,10 @@ npm install
   
 ```bash
 turbo build
+```
+or
+```bash
+npm run dev
 ```
 
 
