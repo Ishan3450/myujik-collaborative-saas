@@ -3,11 +3,11 @@
 I developed a real-time music streaming platform where users can create a stream room, invite others to join, and collaborate for the perfect playlist. Participants can suggest songs by sharing YouTube links and upvote their favorite additions. The queue dynamically updates based on upvotes, ensuring that the most popular songs rise to the top. The stream owner has the ability to play songs in the order of their popularity, ensuring a collaborative and engaging listening experience. All interactions and updates happen in real-time using WebSockets, providing a seamless and interactive user experience.
 
 ## **Demo**
-### Version 2
+### Version 2 - [Details](https://www.linkedin.com/posts/ishanjagani_update-myujik-collaborate-streaming-platform-activity-7274824577615044610-aqdV?utm_source=share&utm_medium=member_desktop)
 https://github.com/user-attachments/assets/b71b604d-a9f1-41b6-929c-acf75ffbc839
 
 
-### Version 1
+### Version 1 - [Details](https://www.linkedin.com/posts/ishanjagani_hey-linkedin-i-just-developed-a-real-time-activity-7255242397805084672-XA28?utm_source=share&utm_medium=member_desktop)
 https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
 
 
@@ -15,8 +15,8 @@ https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
 
 - [**Myujik - Collaborate Streaming**](#myujik---collaborate-streaming)
   - [**Demo**](#demo)
-    - [Version 2](#version-2)
-    - [Version 1](#version-1)
+    - [Version 2 - Details](#version-2---details)
+    - [Version 1 - Details](#version-1---details)
   - [**Table of Contents**](#table-of-contents)
   - [**Project Structure (Monorepo structure)**](#project-structure-monorepo-structure)
   - [**Technologies Used**](#technologies-used)

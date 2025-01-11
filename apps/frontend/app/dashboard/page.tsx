@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronUp, Share2, Play } from "lucide-react";
+import { ChevronUp, Share2, Play, HistoryIcon, ThumbsUpIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
 import LiteYouTubeEmbed from "react-lite-youtube-embed";
 import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
@@ -28,10 +29,12 @@ type Song = {
 type Message = {
   type: string;
   songs: Song[];
+  previouslyPlayedSongs: Song[];
 };
 
 export default function MusicStream() {
   const [songs, setSongs] = useState<Song[]>([]);
+  const [previouslyPlayedSongs, setPreviouslyPlayedSongs] = useState<Song[]>([]);
   const [youtubeLink, setYoutubeLink] = useState("");
   const [currentlyPlaying, setCurrentlyPlaying] = useState<Song | null>(null);
   const session: any = useSession();
@@ -80,6 +83,7 @@ export default function MusicStream() {
 
         if (message.type === "room_created") {
           setSongs(message.songs);
+          setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
           toast.success("Stream started");
         }
 
@@ -90,6 +94,7 @@ export default function MusicStream() {
 
         if (message.type === "joined_room" || message.type === "update_list") {
           setSongs(message.songs);
+          setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
         }
 
         if (message.type === "left_room") {
@@ -112,7 +117,8 @@ export default function MusicStream() {
     ws.current?.send(JSON.stringify({
       type: "owner_ended_stream",
       roomId: session.data?.user?.id,
-      songs
+      songs,
+      previouslyPlayedSongs
     }));
   }
 
@@ -147,6 +153,7 @@ export default function MusicStream() {
         type: "update_songs_list",
         songs: newSongList,
         roomId: session.data?.user?.id,
+        updatedHistory: previouslyPlayedSongs
       })
     );
   };
@@ -156,12 +163,16 @@ export default function MusicStream() {
       const nextSong = sortedSongs[0];
       setCurrentlyPlaying(nextSong);
       const newList = sortedSongs.slice(1);
+      const updatedHistory = [nextSong, ...previouslyPlayedSongs];
+      setPreviouslyPlayedSongs(updatedHistory);
 
       ws.current?.send(
         JSON.stringify({
           type: "update_songs_list",
           roomId: session.data?.user?.id,
           songs: newList,
+          updatedHistory,
+          setCurrentlyPlaying: true
         })
       );
     } else if (!songs.length && currentlyPlaying) {
@@ -245,7 +256,49 @@ export default function MusicStream() {
         {/* Right column: Controls and currently playing */}
         <div className="space-y-3">
           <Card className="p-4">
-            <h2 className="text-2xl font-bold mb-4">Add Song</h2>
+            <div className="flex justify-between mb-3 items-center">
+              <h2 className="text-2xl font-bold">Add Song</h2>
+              <Sheet>
+                <SheetTrigger className="flex gap-1 items-center text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 focus:outline-none">
+                  <HistoryIcon className="h-5 w-5" /> History
+                </SheetTrigger>
+                <SheetContent className="min-w-[40%] max-w-[40%]">
+                  <SheetHeader>
+                    <SheetTitle className="mb-2">
+                      <h2 className="text-2xl flex items-center gap-2"><HistoryIcon /> Previously Played Songs</h2>
+                    </SheetTitle>
+                    <SheetDescription>
+                      <ScrollArea className="h-[calc(100vh-100px)] pr-4">
+                        {previouslyPlayedSongs.map((song) => (
+                          <div
+                            key={song.extractedId}
+                            className="flex items-center space-x-4 mb-2 border rounded-lg px-4"
+                          >
+                            <img
+                              src={song.extractedThumbnail}
+                              alt={song.extractedName}
+                              className="h-20 w-20 object-contain rounded"
+                            />
+                            <div className="flex-grow">
+                              <h3 className="font-semibold">{song.extractedName}</h3>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                Added by {song.addedBy}
+                              </p>
+                            </div>
+
+                            {/* total upvotes indicator */}
+                            {/* <div className="flex gap-1 items-center">
+                              <ThumbsUpIcon className="w-4 h-4" /> {song.votes.length}
+                            </div> */}
+
+                          </div>
+                        ))}
+                      </ScrollArea>
+                    </SheetDescription>
+                  </SheetHeader>
+                </SheetContent>
+              </Sheet>
+            </div>
             <div className="flex space-x-2">
               <Input
                 type="text"
@@ -270,21 +323,6 @@ export default function MusicStream() {
                 title={currentlyPlaying.extractedName}
               />
             ) : (
-              // <div className="flex items-center space-x-4">
-              //   <img
-              //     src={currentlyPlaying.extractedThumbnail}
-              //     alt={currentlyPlaying.extractedName}
-              //     className="w-20 h-20 object-cover rounded"
-              //   />
-              //   <div>
-              //     <h3 className="font-semibold">
-              //       {currentlyPlaying.extractedName}
-              //     </h3>
-              //     <p className="text-sm text-muted-foreground">
-              //       Added by {currentlyPlaying.addedBy}
-              //     </p>
-              //   </div>
-              // </div>
               <p>No song is currently playing</p>
             )}
           </Card>

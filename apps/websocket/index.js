@@ -8,6 +8,7 @@ const wss = new WebSocket.Server({ port: 8080 });
 const socketMap = new Map(); // id => socket obj
 const roomMap = new Map(); // room id => set<socket obj> (people in the room)
 const songsMap = new Map(); // room id => array<songs>
+const songsHistoryMap = new Map(); // room id => array<songs>
 
 wss.on("connection", (ws) => {
     console.log("New client connected");
@@ -35,22 +36,27 @@ wss.on("connection", (ws) => {
 
         if (parsed.type === "owner_create_room") { // create room by owner id
             // check if socket map contains curr user id if not then set it
-            if (!socketMap.has(parsed.id)) socketMap.set(parsed.id, ws);
+            if (!socketMap.has(parsed.id)) {
+                socketMap.set(parsed.id, ws);
+            }
 
             // fetch any previous unplayed songs' list if there
-            let songsList;
+            let songsList, previouslyPlayedSongs;
             try {
                 const streamExists = await redisClient.exists(`stream:${parsed.id}`);
                 if (streamExists === 1) {
                     const songsListInStringForm = await redisClient.hGet(`stream:${parsed.id}`, "songsList");
+                    const songsHistoryInStringForm = await redisClient.hGet(`stream:${parsed.id}`, "songsHistory");
                     songsList = songsListInStringForm ? JSON.parse(songsListInStringForm) : [];
-                    console.log("Cache Hit");
+                    previouslyPlayedSongs = songsHistoryInStringForm ? JSON.parse(songsHistoryInStringForm) : [];
                 } else {
                     songsList = [];
+                    previouslyPlayedSongs = [];
                 }
             } catch (error) {
                 console.log(error);
                 songsList = [];
+                previouslyPlayedSongs = [];
             }
 
             // check if room is already there or not from the roomMap
@@ -60,17 +66,20 @@ wss.on("connection", (ws) => {
             }
             roomMap.get(parsed.id).add(ws);
             songsMap.set(parsed.id, songsList);
+            songsHistoryMap.set(parsed.id, previouslyPlayedSongs);
 
             console.log(`Room created by id ${parsed.id}`);
 
             ws.send(JSON.stringify({
                 type: "room_created",
-                songs: songsList
+                songs: songsList,
+                previouslyPlayedSongs
             }))
         }
 
         if (parsed.type === "owner_ended_stream") {
             saveSongListToCache(parsed.roomId, parsed.songs);
+            saveSongHistoryToCache(parsed.roomId, parsed.previouslyPlayedSongs);
             const roomUsers = roomMap.get(parsed.roomId);
             roomUsers.forEach(user => {
                 user.send(JSON.stringify({
@@ -81,6 +90,7 @@ wss.on("connection", (ws) => {
             roomMap.get(parsed.roomId).clear();
         }
 
+        // this point will only work when the stream is active
         if (parsed.type === "join_room") {
             // check if room exists or not
             if (!roomMap.has(parsed.roomId)) {
@@ -98,7 +108,8 @@ wss.on("connection", (ws) => {
             // send the song lists of the room
             ws.send(JSON.stringify({
                 type: "joined_room",
-                songs: songsMap.get(parsed.roomId)
+                songs: songsMap.get(parsed.roomId),
+                previouslyPlayedSongs: songsHistoryMap.get(parsed.roomId)
             }))
         }
 
@@ -128,20 +139,26 @@ wss.on("connection", (ws) => {
         // needs broadcat to all the room users
         if (parsed.type === "update_songs_list") {
             songsMap.set(parsed.roomId, parsed.songs);
-            broadcastToRoomUsers(parsed.roomId);
+            songsHistoryMap.set(parsed.roomId, parsed.updatedHistory);
+            broadcastToRoomUsers(parsed.roomId, parsed.setCurrentlyPlaying);
         }
     })
 })
 
-function broadcastToRoomUsers(roomId) {
+function broadcastToRoomUsers(roomId, setCurrentlyPlaying = false) {
     const roomUsers = roomMap.get(roomId);
-    const songsList = songsMap.get(roomId) ?? [];
+    const songsList = songsMap.get(roomId);
+    const previouslyPlayedSongs = songsHistoryMap.get(roomId);
     saveSongListToCache(roomId, songsList);
+    saveSongHistoryToCache(roomId, previouslyPlayedSongs);
 
-    roomUsers.forEach(user => user.send(JSON.stringify({
+    let obj = JSON.stringify({
         type: "update_list",
-        songs: songsList
-    })))
+        songs: songsList,
+        previouslyPlayedSongs,
+        ...(setCurrentlyPlaying && { currentlyPlaying: previouslyPlayedSongs[0] })
+    });
+    roomUsers.forEach(user => user.send(obj))
 }
 
 // type of songs must be a string, so call a JSON.stringify for songs while calling
@@ -151,5 +168,13 @@ async function saveSongListToCache(roomId, songs) {
         console.log("Saved list of songs to cache");
     } catch (error) {
         console.log("Error while saving songs in cache: ", error);
+    }
+}
+async function saveSongHistoryToCache(roomId, history) {
+    try {
+        await redisClient.hSet(`stream:${roomId}`, "songsHistory", JSON.stringify(history));
+        console.log("Saved list of previously played songs to cache");
+    } catch (error) {
+        console.log("Error while saving songs history in cache: ", error);
     }
 }

@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronUp, DoorOpen, DoorOpenIcon, Share2 } from "lucide-react";
+import { ChevronUp, DoorOpenIcon, Share2, HistoryIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
 import LiteYouTubeEmbed from "react-lite-youtube-embed";
 import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
@@ -28,6 +29,8 @@ type Song = {
 type Message = {
   type: string;
   songs: Song[];
+  previouslyPlayedSongs: Song[];
+  currentlyPlaying?: Song
 };
 
 export default function MusicStream({
@@ -38,6 +41,7 @@ export default function MusicStream({
   const { streamId } = params;
   const router = useRouter();
   const [songs, setSongs] = useState<Song[]>([]);
+  const [previouslyPlayedSongs, setPreviouslyPlayedSongs] = useState<Song[]>([]);
   const [youtubeLink, setYoutubeLink] = useState("");
   const [currentlyPlaying, setCurrentlyPlaying] = useState<Song | null>(null);
   const session: any = useSession();
@@ -84,10 +88,10 @@ export default function MusicStream({
       ws.current.onmessage = (event) => {
         const message: Message = JSON.parse(event.data);
 
-        if (message.type === "room_created") {
-          toast.success("Stream started");
-          setSongs([]);
-        }
+        // if (message.type === "room_created") {
+        //   toast.success("Stream started");
+        //   setSongs([]);
+        // }
 
         if (message.type === "room_not_exist") {
           toast.error("Room does not exists");
@@ -96,6 +100,12 @@ export default function MusicStream({
 
         if (message.type === "joined_room" || message.type === "update_list") {
           setSongs(message.songs);
+          setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
+
+          // below block will only execute when a song will be picked from the songs list and set to playing
+          if (message.currentlyPlaying) {
+            setCurrentlyPlaying(message.currentlyPlaying);
+          }
         }
 
         if (message.type === "left_room") {
@@ -143,6 +153,7 @@ export default function MusicStream({
         type: "update_songs_list",
         songs: newSongList,
         roomId: streamId,
+        updatedHistory: previouslyPlayedSongs
       })
     );
   };
@@ -174,7 +185,7 @@ export default function MusicStream({
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto px-4 py-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left column: List of songs */}
         <Card className="p-4">
@@ -222,9 +233,46 @@ export default function MusicStream({
         </Card>
 
         {/* Right column: Controls and currently playing */}
-        <div className="space-y-6">
+        <div className="space-y-3">
           <Card className="p-4">
-            <h2 className="text-2xl font-bold mb-4">Add Song</h2>
+            <div className="flex justify-between mb-3 items-center">
+              <h2 className="text-2xl font-bold">Add Song</h2>
+              <Sheet>
+                <SheetTrigger className="flex gap-1 items-center text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 focus:outline-none">
+                  <HistoryIcon className="h-5 w-5" /> History
+                </SheetTrigger>
+                <SheetContent className="min-w-[40%] max-w-[40%]">
+                  <SheetHeader>
+                    <SheetTitle className="mb-2">
+                      <h2 className="text-2xl flex items-center gap-2"><HistoryIcon /> Previously Played Songs</h2>
+                    </SheetTitle>
+                    <SheetDescription>
+                      <ScrollArea className="h-[calc(100vh-100px)] pr-4">
+                        {previouslyPlayedSongs.map((song) => (
+                          <div
+                            key={song.extractedId}
+                            className="flex items-center space-x-4 mb-2 border rounded-lg px-4"
+                          >
+                            <img
+                              src={song.extractedThumbnail}
+                              alt={song.extractedName}
+                              className="h-20 w-20 object-contain rounded"
+                            />
+                            <div className="flex-grow">
+                              <h3 className="font-semibold">{song.extractedName}</h3>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                Added by {song.addedBy}
+                              </p>
+                            </div>
+
+                          </div>
+                        ))}
+                      </ScrollArea>
+                    </SheetDescription>
+                  </SheetHeader>
+                </SheetContent>
+              </Sheet>
+            </div>
             <div className="flex space-x-2">
               <Input
                 type="text"
@@ -242,23 +290,12 @@ export default function MusicStream({
           </Card>
 
           <Card className="p-4">
-            <h2 className="text-2xl font-bold mb-4">Currently Playing</h2>
+            <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
             {currentlyPlaying ? (
-              <div className="flex items-center space-x-4">
-                <img
-                  src={currentlyPlaying.extractedThumbnail}
-                  alt={currentlyPlaying.extractedName}
-                  className="w-20 h-20 object-cover rounded"
-                />
-                <div>
-                  <h3 className="font-semibold">
-                    {currentlyPlaying.extractedName}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Added by {currentlyPlaying.addedBy}
-                  </p>
-                </div>
-              </div>
+              <LiteYouTubeEmbed
+                id={currentlyPlaying.extractedId}
+                title={currentlyPlaying.extractedName}
+              />
             ) : (
               <p>No song is currently playing</p>
             )}
