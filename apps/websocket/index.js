@@ -78,6 +78,8 @@ wss.on("connection", (ws) => {
         }
 
         if (parsed.type === "owner_ended_stream") {
+            console.log(`Closing stream for ${parsed.roomId}`);
+
             saveSongListToCache(parsed.roomId, parsed.songs);
             saveSongHistoryToCache(parsed.roomId, parsed.previouslyPlayedSongs);
             const roomUsers = roomMap.get(parsed.roomId);

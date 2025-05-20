@@ -9,8 +9,14 @@ import { ChevronUp, DoorOpenIcon, Share2, HistoryIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger
+} from "@/components/ui/sheet";
 import LiteYouTubeEmbed from "react-lite-youtube-embed";
 import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
 
@@ -30,7 +36,7 @@ type Message = {
   type: string;
   songs: Song[];
   previouslyPlayedSongs: Song[];
-  currentlyPlaying?: Song
+  currentlyPlaying?: Song;
 };
 
 export default function MusicStream({
@@ -71,10 +77,7 @@ export default function MusicStream({
     }
     init();
 
-    // return () => {
-    //   ws.current?.close();
-    //   ws.current = null;
-    // };
+    window.addEventListener("beforeunload", leaveRoom);
   }, [session]);
 
   async function startWsConnection() {
@@ -117,7 +120,11 @@ export default function MusicStream({
       };
 
       ws.current.onclose = () => {
-        ws.current = null;
+        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+          leaveRoom();
+          ws.current = null;
+          console.log("Closed the websocket connection");
+        }
       };
     });
   }
@@ -166,6 +173,7 @@ export default function MusicStream({
     }));
     toast.success("Leaving stream")
     router.push("/");
+    ws.current = null;
   }
 
   const sortedSongs = [...songs].sort(
@@ -194,9 +202,9 @@ export default function MusicStream({
             <p className="text-gray-400 ">Stream: {streamId}</p>
           </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
-            {sortedSongs.map((song) => (
+            {sortedSongs.map((song, idx) => (
               <div
-                key={song.extractedId}
+                key={idx}
                 className="flex items-center space-x-4 mb-4"
               >
                 <img
@@ -248,9 +256,9 @@ export default function MusicStream({
                     </SheetTitle>
                     <SheetDescription>
                       <ScrollArea className="h-[calc(100vh-100px)] pr-4">
-                        {previouslyPlayedSongs.map((song) => (
+                        {previouslyPlayedSongs.map((song, idx) => (
                           <div
-                            key={song.extractedId}
+                            key={idx}
                             className="flex items-center space-x-4 mb-2 border rounded-lg px-4"
                           >
                             <img
