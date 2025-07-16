@@ -19,27 +19,15 @@ import {
 } from "@/components/ui/sheet";
 import LiteYouTubeEmbed from "react-lite-youtube-embed";
 import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
+import {
+  Message,
+  Song
+} from "@/types/index"
 
 // @ts-ignore
 import youtubeurl from "youtube-url";
 
-// Type for a song
-type Song = {
-  extractedId: string;
-  extractedThumbnail: string;
-  extractedName: string;
-  addedBy: string;
-  votes: string[];
-};
-
-type Message = {
-  type: string;
-  songs: Song[];
-  previouslyPlayedSongs: Song[];
-  currentlyPlaying?: Song;
-};
-
-export default function MusicStream({
+export default function MusicStreamParticipant({
   params,
 }: {
   params: { streamId: string };
