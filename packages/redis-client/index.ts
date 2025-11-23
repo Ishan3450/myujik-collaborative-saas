@@ -25,4 +25,4 @@ const getRedisClient = (): RedisClientType => {
     return redisClient;
 };
 
-module.exports = getRedisClient;
+export default getRedisClient;

@@ -11,6 +11,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "redis": "^5.10.0"
+  },
+  "devDependencies": {
     "@types/redis": "^4.0.11"
   }
 }

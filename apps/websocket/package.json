@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node index.js"
+    "dev": "tsc -b && node dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -15,5 +14,8 @@
     "@repo/redis-client": "*",
     "ws": "^8.18.0",
     "youtube-search-api": "^1.2.2"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
   }
 }
