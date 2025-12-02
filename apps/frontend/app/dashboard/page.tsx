@@ -17,24 +17,27 @@ import {
   SheetTitle,
   SheetTrigger
 } from "@/components/ui/sheet";
-import LiteYouTubeEmbed from "react-lite-youtube-embed";
-import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
 import {
   Message,
-  Song
+  Song,
+  SongExtended,
 } from "@/types/index"
 
 // @ts-ignore
 import youtubeurl from "youtube-url";
+import { YouTubeEmbed } from "@/components/YoutubeEmbed";
 
 export default function MusicStreamOwner() {
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [previouslyPlayedSongs, setPreviouslyPlayedSongs] = useState<Song[]>([]);
-  const [youtubeLink, setYoutubeLink] = useState("");
-  const [currentlyPlaying, setCurrentlyPlaying] = useState<Song | null>(null);
   const session: any = useSession();
+  const wsMessageHandlerRef = useRef<(event: MessageEvent) => void>(() => { });
   const ws = useRef<WebSocket | null>(null);
   const router = useRouter();
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [previouslyPlayedSongs, setPreviouslyPlayedSongs] = useState<Song[]>([]);
+  const songsRef = useRef(songs);
+  const previouslyPlayedSongsRef = useRef(previouslyPlayedSongs);
+  const [youtubeLink, setYoutubeLink] = useState("");
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<SongExtended | null>(null);
 
   useEffect(() => {
     if (session.status === "loading" || ws.current) return;
@@ -49,6 +52,7 @@ export default function MusicStreamOwner() {
       if (session.status === "authenticated") {
         await startWsConnection();
 
+        ws.current?.addEventListener("message", wsMessageHandlerRef.current);
         ws.current?.send(
           JSON.stringify({
             type: "owner_create_room",
@@ -58,9 +62,59 @@ export default function MusicStreamOwner() {
       }
     }
     init();
-
     window.addEventListener("beforeunload", handleStreamEnd);
+
+    return () => {
+      // Note: WebSocket listener cleanup is intentionally omitted here to prevent
+      // reconnection issues on tab switches; listener is removed in leaveRoom instead
+
+      window.removeEventListener("beforeunload", handleStreamEnd);
+    }
   }, [session]);
+
+  useEffect(() => {
+    wsMessageHandlerRef.current = (event: MessageEvent) => {
+      const message: Message = JSON.parse(event.data);
+
+      if (message.type === "room_created") {
+        setSongs(message.songs);
+        setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
+        toast.success("Stream started");
+      }
+
+      if (message.type === "room_not_exist") {
+        toast.error("Room does not exists");
+        router.push("/");
+      }
+
+      if (message.type === "joined_room" || message.type === "update_list") {
+        setSongs(message.songs);
+        setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
+
+        // When a song is picked from the queue to play, or when a participant joins the stream
+        if (message.currentlyPlaying) {
+          setCurrentlyPlaying(message.currentlyPlaying);
+        }
+      }
+
+      if (message.type === "left_room") {
+        setSongs([]);
+        setCurrentlyPlaying(null);
+        toast.success("Stream Ended");
+        router.push("/");
+        leaveRoom();
+      }
+
+      if (message.type === "song_queue_concluded") {
+        setCurrentlyPlaying(null);
+      }
+    }
+  }, [router]);
+
+  useEffect(() => {
+    songsRef.current = songs;
+    previouslyPlayedSongsRef.current = previouslyPlayedSongs;
+  }, [songs, previouslyPlayedSongs]);
 
   async function startWsConnection() {
     return new Promise<void>((resolve) => {
@@ -69,43 +123,6 @@ export default function MusicStreamOwner() {
       ws.current.onopen = () => {
         resolve();
       };
-
-      ws.current.onmessage = (event) => {
-        const message: Message = JSON.parse(event.data);
-
-        if (message.type === "room_created") {
-          setSongs(message.songs);
-          setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
-          toast.success("Stream started");
-        }
-
-        if (message.type === "room_not_exist") {
-          toast.error("Room does not exists");
-          router.push("/");
-        }
-
-        if (message.type === "joined_room" || message.type === "update_list") {
-          setSongs(message.songs);
-          setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
-        }
-
-        if (message.type === "left_room") {
-          setSongs([]);
-          setCurrentlyPlaying(null);
-          ws.current = null;
-          toast.success("Stream Ended");
-          router.push("/");
-          leaveRoom();
-        }
-      };
-
-      ws.current.onclose = () => {
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-          handleStreamEnd();
-          ws.current = null;
-          console.log("Closed the websocket connection");
-        }
-      };
     });
   }
 
@@ -113,9 +130,10 @@ export default function MusicStreamOwner() {
     ws.current?.send(JSON.stringify({
       type: "owner_ended_stream",
       roomId: session.data?.user?.id,
-      songs,
-      previouslyPlayedSongs
+      songs: songsRef.current,
+      previouslyPlayedSongs: previouslyPlayedSongsRef.current,
     }));
+    ws.current?.removeEventListener("message", wsMessageHandlerRef.current);
     ws.current = null;
   }
 
@@ -136,7 +154,7 @@ export default function MusicStreamOwner() {
   };
 
   const handleUpvote = (extractedId: string) => {
-    const newSongList = songs.map((song) => {
+    const newSongList = songsRef.current.map((song) => {
       return song.extractedId === extractedId
         ? {
           ...song,
@@ -150,7 +168,7 @@ export default function MusicStreamOwner() {
         type: "update_songs_list",
         songs: newSongList,
         roomId: session.data?.user?.id,
-        updatedHistory: previouslyPlayedSongs
+        updatedHistory: previouslyPlayedSongsRef.current,
       })
     );
   };
@@ -158,22 +176,25 @@ export default function MusicStreamOwner() {
   const handlePlayNext = () => {
     if (songs.length > 0) {
       const nextSong = sortedSongs[0];
-      setCurrentlyPlaying(nextSong);
       const newList = sortedSongs.slice(1);
-      const updatedHistory = [nextSong, ...previouslyPlayedSongs];
-      setPreviouslyPlayedSongs(updatedHistory);
+      const updatedHistory = [nextSong, ...previouslyPlayedSongsRef.current];
 
       ws.current?.send(
         JSON.stringify({
-          type: "update_songs_list",
+          type: "play_next_song",
+          songToPlay: nextSong,
           roomId: session.data?.user?.id,
-          songs: newList,
-          updatedHistory,
-          setCurrentlyPlaying: true
+          updatedList: newList,
+          updatedHistory: updatedHistory,
         })
       );
     } else if (!songs.length && currentlyPlaying) {
-      setCurrentlyPlaying(null);
+      ws.current?.send(
+        JSON.stringify({
+          type: "song_queue_concluded",
+          roomId: session.data?.user?.id,
+        })
+      );
     }
   };
 
@@ -183,6 +204,25 @@ export default function MusicStreamOwner() {
       roomId: session.data?.user?.id,
       id: session.data?.user?.id
     }));
+  }
+
+  const handlePlaySong = (songResumedTime: number) => {
+    if (!currentlyPlaying) return;
+
+    ws.current?.send(JSON.stringify({
+      type: "song_state_play",
+      roomId: session.data?.user?.id,
+      songResumedTime: songResumedTime,
+    }))
+  }
+
+  const handlePauseSong = () => {
+    if (!currentlyPlaying) return;
+
+    ws.current?.send(JSON.stringify({
+      type: "song_state_pause",
+      roomId: session.data?.user?.id,
+    }))
   }
 
   const sortedSongs = [...songs].sort(
@@ -212,9 +252,9 @@ export default function MusicStreamOwner() {
             <Button className="bg-red-600 text-white font-bold" variant={"outline"} onClick={handleStreamEnd}>End Stream</Button>
           </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
-            {sortedSongs.map((song, idx) => (
+            {sortedSongs.map((song) => (
               <div
-                key={idx}
+                key={song.extractedId}
                 className="flex items-center space-x-4 mb-4"
               >
                 <img
@@ -225,7 +265,7 @@ export default function MusicStreamOwner() {
                 <div className="flex-grow">
                   <h3 className="font-semibold">{song.extractedName}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Added by {song.addedBy}
+                    Requested by {song.addedBy}
                   </p>
                 </div>
 
@@ -279,7 +319,7 @@ export default function MusicStreamOwner() {
                             <div className="flex-grow">
                               <h3 className="font-semibold">{song.extractedName}</h3>
                               <p className="mt-1 text-sm text-muted-foreground">
-                                Added by {song.addedBy}
+                                Requested by {song.addedBy}
                               </p>
                             </div>
 
@@ -315,9 +355,14 @@ export default function MusicStreamOwner() {
           <Card className="p-4">
             <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
             {currentlyPlaying ? (
-              <LiteYouTubeEmbed
-                id={currentlyPlaying.extractedId}
-                title={currentlyPlaying.extractedName}
+              <YouTubeEmbed
+                currentlyPlaying={currentlyPlaying}
+                setCurrentlyPlaying={setCurrentlyPlaying}
+                handlePlayNext={handlePlayNext}
+                websocket={ws.current}
+                handlePlaySong={handlePlaySong}
+                handlePauseSong={handlePauseSong}
+                isAdmin={true}
               />
             ) : (
               <p>No song is currently playing</p>
