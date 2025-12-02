@@ -4,13 +4,18 @@ import getRedisClient from "@repo/redis-client";
 // @ts-ignore
 import youtubesearchapi from "youtube-search-api";
 
-// duplicate from apps/types/index.d.ts so in future make a common solution for this
+// Song and SongExtended both duplicated from apps/types/index.d.ts so in future make a common solution for this
 export type Song = {
     extractedId: string;
     extractedThumbnail: string;
     extractedName: string;
     addedBy: string;
     votes: string[];
+};
+type SongExtended = Song & {
+    playedAt: number; // time in unix form (server time)
+    isPlaying: boolean; // flag telling whether the song is in playing or pause state
+    songResumedTime: number; // elapsed seconds since the song started playing or was last resumed
 };
 
 enum IncomingMessageTypes {
@@ -20,6 +25,10 @@ enum IncomingMessageTypes {
     leave_room = "leave_room",
     add_song = "add_song",
     update_songs_list = "update_songs_list",
+    play_next_song = "play_next_song",
+    song_state_play = "song_state_play",
+    song_state_pause = "song_state_pause",
+    song_queue_concluded = "song_queue_concluded",
 }
 type IncomingMessage = {
     type: IncomingMessageTypes.owner_create_room,
@@ -47,7 +56,19 @@ type IncomingMessage = {
     songs: Song[],
     roomId: string,
     updatedHistory: Song[],
-    setCurrentlyPlaying: boolean,
+} | {
+    type: IncomingMessageTypes.play_next_song,
+    songToPlay: Song,
+    roomId: string,
+    updatedList: Song[],
+    updatedHistory: Song[],
+} | {
+    type: IncomingMessageTypes.song_state_play,
+    roomId: string,
+    songResumedTime: number,
+} | {
+    type: IncomingMessageTypes.song_state_pause | IncomingMessageTypes.song_queue_concluded,
+    roomId: string,
 }
 
 
@@ -58,6 +79,7 @@ const socketMap = new Map<string, WebSocket>(); // user id => socket obj
 const roomMap = new Map<string, Set<WebSocket>>(); // room id => set<socket obj> (people in the room)
 const songsMap = new Map<string, Song[]>(); // room id => array<songs>
 const songsHistoryMap = new Map<string, Song[]>(); // room id => array<songs>
+const roomToCurrentPlayingSong = new Map<string, SongExtended>(); // room id => Current Playing Song with some additional fields
 
 wss.on("connection", (ws: WebSocket) => {
     console.log("New client connected");
@@ -113,6 +135,7 @@ wss.on("connection", (ws: WebSocket) => {
 
                 saveSongListToCache(parsed.roomId, parsed.songs);
                 saveSongHistoryToCache(parsed.roomId, parsed.previouslyPlayedSongs);
+                roomToCurrentPlayingSong.delete(parsed.roomId);
 
                 const roomUsers = roomMap.get(parsed.roomId)!;
                 roomUsers.forEach(user => {
@@ -140,7 +163,8 @@ wss.on("connection", (ws: WebSocket) => {
                 ws.send(JSON.stringify({
                     type: "joined_room",
                     songs: songsMap.get(parsed.roomId),
-                    previouslyPlayedSongs: songsHistoryMap.get(parsed.roomId)
+                    previouslyPlayedSongs: songsHistoryMap.get(parsed.roomId),
+                    currentlyPlaying: roomToCurrentPlayingSong.get(parsed.roomId),
                 }))
                 break;
             case IncomingMessageTypes.leave_room:
@@ -151,6 +175,13 @@ wss.on("connection", (ws: WebSocket) => {
                 break;
             case IncomingMessageTypes.add_song:
                 const extractedId = parsed.extractedId;
+
+                if (songsMap.get(parsed.roomId)?.some(song => song.extractedId === extractedId)) {
+                    // prevents duplication of song
+                    console.log("Duplicate song request received.");
+                    return;
+                }
+
                 let videoDetails;
                 try {
                     videoDetails = await youtubesearchapi.GetVideoDetails(extractedId);
@@ -185,26 +216,103 @@ wss.on("connection", (ws: WebSocket) => {
             case IncomingMessageTypes.update_songs_list:
                 songsMap.set(parsed.roomId, parsed.songs);
                 songsHistoryMap.set(parsed.roomId, parsed.updatedHistory);
-                broadcastToRoomUsers(parsed.roomId, parsed.setCurrentlyPlaying);
+                broadcastToRoomUsers(parsed.roomId);
                 break;
-            default:
+            case IncomingMessageTypes.play_next_song:
+                {
+                    const songToBePlayed: SongExtended = {
+                        ...parsed.songToPlay,
+                        playedAt: Date.now(),
+                        isPlaying: true, // default true because to enable autoplay
+                        songResumedTime: 0, // Set to 0 since the song is starting from the beginning
+                    }
+
+                    // store the starting time of the play of song in room
+                    roomToCurrentPlayingSong.set(parsed.roomId, songToBePlayed);
+
+                    songsMap.set(parsed.roomId, parsed.updatedList);
+                    songsHistoryMap.set(parsed.roomId, parsed.updatedHistory);
+
+                    broadcastToRoomUsers(parsed.roomId, songToBePlayed);
+                }
+                break;
+            case IncomingMessageTypes.song_state_pause:
+                if (roomMap.has(parsed.roomId) && roomToCurrentPlayingSong.has(parsed.roomId)) {
+                    roomToCurrentPlayingSong.get(parsed.roomId)!.isPlaying = false;
+
+                    const roomUsers = roomMap.get(parsed.roomId);
+                    roomUsers?.forEach(user => {
+                        if (user.readyState === WebSocket.OPEN) {
+                            try {
+                                user.send(JSON.stringify({
+                                    type: "song_state_pause",
+                                }));
+                            } catch (error) {
+                                console.error("Error sending pause state to user:", error);
+                            }
+                        }
+                    })
+                }
+                break;
+            case IncomingMessageTypes.song_state_play:
+                if (roomMap.has(parsed.roomId) && roomToCurrentPlayingSong.has(parsed.roomId)) {
+                    const updatedPlayTime = Date.now();
+                    const currentlyPlayingSong = roomToCurrentPlayingSong.get(parsed.roomId)!;
+
+                    currentlyPlayingSong.isPlaying = true;
+                    currentlyPlayingSong.playedAt = updatedPlayTime;
+                    currentlyPlayingSong.songResumedTime = parsed.songResumedTime;
+
+                    const roomUsers = roomMap.get(parsed.roomId);
+                    roomUsers?.forEach(user => {
+                        if (user.readyState === WebSocket.OPEN) {
+                            try {
+                                user.send(JSON.stringify({
+                                    type: "song_state_play",
+                                    updatedPlayTime: updatedPlayTime,
+                                }));
+                            } catch (error) {
+                                console.error("Error sending play state to user:", error);
+                            }
+                        }
+                    })
+                }
+                break;
+            case IncomingMessageTypes.song_queue_concluded:
+                roomToCurrentPlayingSong.delete(parsed.roomId);
+
+                roomMap.get(parsed.roomId)?.forEach(roomParticipant => {
+                    if (roomParticipant.readyState === WebSocket.OPEN) {
+                        try {
+                            roomParticipant.send(
+                                JSON.stringify({
+                                    type: "song_queue_concluded",
+                                })
+                            );
+                        } catch (error) {
+                            console.error("Error sending queue to user:", error);
+                        }
+                    }
+                });
                 break;
         }
     })
 })
 
-function broadcastToRoomUsers(roomId: string, setCurrentlyPlaying = false) {
+// Currently this function handles the play_next_song logic also, kept it here only
+// I feel that it has to be separate type when processing increases but as of now this is what we have :)
+function broadcastToRoomUsers(roomId: string, updateCurrentPlayingSong: SongExtended | boolean = false) {
     const roomUsers = roomMap.get(roomId)!;
     const songsList = songsMap.get(roomId)!;
     const previouslyPlayedSongs = songsHistoryMap.get(roomId)!;
     saveSongListToCache(roomId, songsList);
     saveSongHistoryToCache(roomId, previouslyPlayedSongs);
 
-    let obj = JSON.stringify({
+    const obj = JSON.stringify({
         type: "update_list",
         songs: songsList,
         previouslyPlayedSongs,
-        ...(setCurrentlyPlaying && { currentlyPlaying: previouslyPlayedSongs[0] })
+        ...(updateCurrentPlayingSong && { currentlyPlaying: updateCurrentPlayingSong })
     });
     roomUsers.forEach(user => {
         if (user.readyState === WebSocket.OPEN) {
