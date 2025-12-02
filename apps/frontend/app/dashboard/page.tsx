@@ -17,24 +17,24 @@ import {
   SheetTitle,
   SheetTrigger
 } from "@/components/ui/sheet";
-import LiteYouTubeEmbed from "react-lite-youtube-embed";
-import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
 import {
   Message,
-  Song
+  Song,
+  SongExtended,
 } from "@/types/index"
 
 // @ts-ignore
 import youtubeurl from "youtube-url";
+import { YouTubeEmbed } from "@/components/YoutubeEmbed";
 
 export default function MusicStreamOwner() {
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [previouslyPlayedSongs, setPreviouslyPlayedSongs] = useState<Song[]>([]);
-  const [youtubeLink, setYoutubeLink] = useState("");
-  const [currentlyPlaying, setCurrentlyPlaying] = useState<Song | null>(null);
   const session: any = useSession();
   const ws = useRef<WebSocket | null>(null);
   const router = useRouter();
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [previouslyPlayedSongs, setPreviouslyPlayedSongs] = useState<Song[]>([]);
+  const [youtubeLink, setYoutubeLink] = useState("");
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<SongExtended | null>(null);
 
   useEffect(() => {
     if (session.status === "loading" || ws.current) return;
@@ -60,6 +60,9 @@ export default function MusicStreamOwner() {
     init();
 
     window.addEventListener("beforeunload", handleStreamEnd);
+
+    // NOTE: here no need of beforeunload event on the cleanup function because, on refresh also the stream will end
+    // leading the participants to be redirected on the home page
   }, [session]);
 
   async function startWsConnection() {
@@ -70,7 +73,7 @@ export default function MusicStreamOwner() {
         resolve();
       };
 
-      ws.current.onmessage = (event) => {
+      ws.current.addEventListener("message", (event) => {
         const message: Message = JSON.parse(event.data);
 
         if (message.type === "room_created") {
@@ -87,6 +90,11 @@ export default function MusicStreamOwner() {
         if (message.type === "joined_room" || message.type === "update_list") {
           setSongs(message.songs);
           setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
+
+          // When a song is picked from the queue to play, or when a participant joins the stream
+          if (message.currentlyPlaying) {
+            setCurrentlyPlaying(message.currentlyPlaying);
+          }
         }
 
         if (message.type === "left_room") {
@@ -97,7 +105,11 @@ export default function MusicStreamOwner() {
           router.push("/");
           leaveRoom();
         }
-      };
+
+        if (message.type === "song_queue_concluded") {
+          setCurrentlyPlaying(null);
+        }
+      });
 
       ws.current.onclose = () => {
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -150,7 +162,7 @@ export default function MusicStreamOwner() {
         type: "update_songs_list",
         songs: newSongList,
         roomId: session.data?.user?.id,
-        updatedHistory: previouslyPlayedSongs
+        updatedHistory: previouslyPlayedSongs,
       })
     );
   };
@@ -158,22 +170,25 @@ export default function MusicStreamOwner() {
   const handlePlayNext = () => {
     if (songs.length > 0) {
       const nextSong = sortedSongs[0];
-      setCurrentlyPlaying(nextSong);
       const newList = sortedSongs.slice(1);
       const updatedHistory = [nextSong, ...previouslyPlayedSongs];
-      setPreviouslyPlayedSongs(updatedHistory);
 
       ws.current?.send(
         JSON.stringify({
-          type: "update_songs_list",
+          type: "play_next_song",
+          songToPlay: nextSong,
           roomId: session.data?.user?.id,
-          songs: newList,
-          updatedHistory,
-          setCurrentlyPlaying: true
+          updatedList: newList,
+          updatedHistory: updatedHistory,
         })
       );
     } else if (!songs.length && currentlyPlaying) {
-      setCurrentlyPlaying(null);
+      ws.current?.send(
+        JSON.stringify({
+          type: "song_queue_concluded",
+          roomId: session.data?.user?.id,
+        })
+      );
     }
   };
 
@@ -183,6 +198,24 @@ export default function MusicStreamOwner() {
       roomId: session.data?.user?.id,
       id: session.data?.user?.id
     }));
+  }
+
+  const handlePlaySong = () => {
+    if (!currentlyPlaying) return;
+
+    ws.current?.send(JSON.stringify({
+      type: "song_state_play",
+      roomId: session.data?.user?.id,
+    }))
+  }
+
+  const handlePauseSong = () => {
+    if (!currentlyPlaying) return;
+
+    ws.current?.send(JSON.stringify({
+      type: "song_state_pause",
+      roomId: session.data?.user?.id,
+    }))
   }
 
   const sortedSongs = [...songs].sort(
@@ -225,7 +258,7 @@ export default function MusicStreamOwner() {
                 <div className="flex-grow">
                   <h3 className="font-semibold">{song.extractedName}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Added by {song.addedBy}
+                    Requested by {song.addedBy}
                   </p>
                 </div>
 
@@ -279,7 +312,7 @@ export default function MusicStreamOwner() {
                             <div className="flex-grow">
                               <h3 className="font-semibold">{song.extractedName}</h3>
                               <p className="mt-1 text-sm text-muted-foreground">
-                                Added by {song.addedBy}
+                                Requested by {song.addedBy}
                               </p>
                             </div>
 
@@ -315,9 +348,14 @@ export default function MusicStreamOwner() {
           <Card className="p-4">
             <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
             {currentlyPlaying ? (
-              <LiteYouTubeEmbed
-                id={currentlyPlaying.extractedId}
-                title={currentlyPlaying.extractedName}
+              <YouTubeEmbed
+                currentlyPlaying={currentlyPlaying}
+                setCurrentlyPlaying={setCurrentlyPlaying}
+                handlePlayNext={handlePlayNext}
+                websocket={ws.current}
+                handlePlaySong={handlePlaySong}
+                handlePauseSong={handlePauseSong}
+                isAdmin={true}
               />
             ) : (
               <p>No song is currently playing</p>

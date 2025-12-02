@@ -1,6 +1,6 @@
 "use client";
 
-import { Music } from "lucide-react";
+import { Loader2Icon, Music } from "lucide-react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "./ui/button";
@@ -35,7 +35,9 @@ export function AppBar(): JSX.Element {
           Pricing
         </Link>
         <div>
-          {session.data?.user ? (
+          {session.status === "loading" ? (
+            <Loader2Icon className="animate-spin" />
+          ) : session.status === "authenticated" && session.data?.user ? (
             <div className="flex gap-3">
               <Button
                 className="bg-gray-800 py-2 px-4 rounded-lg"

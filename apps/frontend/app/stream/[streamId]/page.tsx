@@ -17,15 +17,16 @@ import {
   SheetTitle,
   SheetTrigger
 } from "@/components/ui/sheet";
-import LiteYouTubeEmbed from "react-lite-youtube-embed";
-import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
 import {
   Message,
-  Song
+  Song,
+  SongExtended,
 } from "@/types/index"
 
 // @ts-ignore
 import youtubeurl from "youtube-url";
+import { YouTubeEmbed } from "@/components/YoutubeEmbed";
+import UserStreamConfigDialog from "@/components/UserStreamConfigDialog";
 
 export default function MusicStreamParticipant({
   params,
@@ -33,13 +34,15 @@ export default function MusicStreamParticipant({
   params: { streamId: string };
 }) {
   const { streamId } = params;
+  const session: any = useSession();
+  const ws = useRef<WebSocket | null>(null);
   const router = useRouter();
   const [songs, setSongs] = useState<Song[]>([]);
   const [previouslyPlayedSongs, setPreviouslyPlayedSongs] = useState<Song[]>([]);
   const [youtubeLink, setYoutubeLink] = useState("");
-  const [currentlyPlaying, setCurrentlyPlaying] = useState<Song | null>(null);
-  const session: any = useSession();
-  const ws = useRef<WebSocket | null>(null);
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<SongExtended | null>(null);
+  const [showDialog, setShowDialog] = useState<boolean>(true);
+
 
   useEffect(() => {
     if (session.status === "loading" || ws.current) return;
@@ -66,6 +69,9 @@ export default function MusicStreamParticipant({
     init();
 
     window.addEventListener("beforeunload", leaveRoom);
+
+    // NOTE: here no need of beforeunload event on the cleanup function because, on refresh also the stream will end
+    // leading the participants to be redirected on the home page
   }, [session]);
 
   async function startWsConnection() {
@@ -76,13 +82,8 @@ export default function MusicStreamParticipant({
         resolve();
       };
 
-      ws.current.onmessage = (event) => {
+      ws.current.addEventListener("message", (event) => {
         const message: Message = JSON.parse(event.data);
-
-        // if (message.type === "room_created") {
-        //   toast.success("Stream started");
-        //   setSongs([]);
-        // }
 
         if (message.type === "room_not_exist") {
           toast.error("Room does not exists");
@@ -93,7 +94,7 @@ export default function MusicStreamParticipant({
           setSongs(message.songs);
           setPreviouslyPlayedSongs(message.previouslyPlayedSongs);
 
-          // below block will only execute when a song will be picked from the songs list and set to playing
+          // When a song is picked from the queue to play, or when a participant joins the stream
           if (message.currentlyPlaying) {
             setCurrentlyPlaying(message.currentlyPlaying);
           }
@@ -105,7 +106,11 @@ export default function MusicStreamParticipant({
           ws.current = null;
           leaveRoom();
         }
-      };
+
+        if (message.type === "song_queue_concluded") {
+          setCurrentlyPlaying(null);
+        }
+      });
 
       ws.current.onclose = () => {
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -182,132 +187,141 @@ export default function MusicStreamParticipant({
 
   return (
     <div className="container mx-auto px-4 py-3">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left column: List of songs */}
-        <Card className="p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">Songs List</h2>
-            <p className="text-gray-400 ">Stream: {streamId}</p>
-          </div>
-          <ScrollArea className="h-[calc(100vh-200px)]">
-            {sortedSongs.map((song, idx) => (
-              <div
-                key={idx}
-                className="flex items-center space-x-4 mb-4"
-              >
-                <img
-                  src={song.extractedThumbnail}
-                  alt={song.extractedName}
-                  className="w-20 h-20 object-contain rounded"
-                />
-                <div className="flex-grow">
-                  <h3 className="font-semibold">{song.extractedName}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Added by {song.addedBy}
-                  </p>
-                </div>
+      <UserStreamConfigDialog
+        streamId={streamId}
+        showDialog={showDialog}
+        setShowDialog={setShowDialog}
+      />
 
-                <div className="flex flex-col items-center justify-center">
-                  {!song.votes.find((id) => id === session.data?.user?.id) ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleUpvote(song.extractedId)}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <span>{song.votes.length ? song.votes.length : 0}</span>
-                    </>
-                  ) : (
-                    <Button>{song.votes.length ? song.votes.length : 0}</Button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </ScrollArea>
-        </Card>
-
-        {/* Right column: Controls and currently playing */}
-        <div className="space-y-3">
+      {!showDialog && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left column: List of songs */}
           <Card className="p-4">
-            <div className="flex justify-between mb-3 items-center">
-              <h2 className="text-2xl font-bold">Add Song</h2>
-              <Sheet>
-                <SheetTrigger className="flex gap-1 items-center text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 focus:outline-none">
-                  <HistoryIcon className="h-5 w-5" /> History
-                </SheetTrigger>
-                <SheetContent className="min-w-[40%] max-w-[40%]">
-                  <SheetHeader>
-                    <SheetTitle className="mb-2">
-                      <h2 className="text-2xl flex items-center gap-2"><HistoryIcon /> Previously Played Songs</h2>
-                    </SheetTitle>
-                    <SheetDescription>
-                      <ScrollArea className="h-[calc(100vh-100px)] pr-4">
-                        {previouslyPlayedSongs.map((song, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center space-x-4 mb-2 border rounded-lg px-4"
-                          >
-                            <img
-                              src={song.extractedThumbnail}
-                              alt={song.extractedName}
-                              className="h-20 w-20 object-contain rounded"
-                            />
-                            <div className="flex-grow">
-                              <h3 className="font-semibold">{song.extractedName}</h3>
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                Added by {song.addedBy}
-                              </p>
-                            </div>
-
-                          </div>
-                        ))}
-                      </ScrollArea>
-                    </SheetDescription>
-                  </SheetHeader>
-                </SheetContent>
-              </Sheet>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Songs List</h2>
+              <p className="text-gray-400 ">Stream: {streamId}</p>
             </div>
+            <ScrollArea className="h-[calc(100vh-200px)]">
+              {sortedSongs.map((song, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center space-x-4 mb-4"
+                >
+                  <img
+                    src={song.extractedThumbnail}
+                    alt={song.extractedName}
+                    className="w-20 h-20 object-contain rounded"
+                  />
+                  <div className="flex-grow">
+                    <h3 className="font-semibold">{song.extractedName}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Requested by {song.addedBy}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center">
+                    {!song.votes.find((id) => id === session.data?.user?.id) ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleUpvote(song.extractedId)}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <span>{song.votes.length ? song.votes.length : 0}</span>
+                      </>
+                    ) : (
+                      <Button>{song.votes.length ? song.votes.length : 0}</Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </ScrollArea>
+          </Card>
+
+          {/* Right column: Controls and currently playing */}
+          <div className="space-y-3">
+            <Card className="p-4">
+              <div className="flex justify-between mb-3 items-center">
+                <h2 className="text-2xl font-bold">Add Song</h2>
+                <Sheet>
+                  <SheetTrigger className="flex gap-1 items-center text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 focus:outline-none">
+                    <HistoryIcon className="h-5 w-5" /> History
+                  </SheetTrigger>
+                  <SheetContent className="min-w-[40%] max-w-[40%]">
+                    <SheetHeader>
+                      <SheetTitle className="mb-2">
+                        <h2 className="text-2xl flex items-center gap-2"><HistoryIcon /> Previously Played Songs</h2>
+                      </SheetTitle>
+                      <SheetDescription>
+                        <ScrollArea className="h-[calc(100vh-100px)] pr-4">
+                          {previouslyPlayedSongs.map((song, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center space-x-4 mb-2 border rounded-lg px-4"
+                            >
+                              <img
+                                src={song.extractedThumbnail}
+                                alt={song.extractedName}
+                                className="h-20 w-20 object-contain rounded"
+                              />
+                              <div className="flex-grow">
+                                <h3 className="font-semibold">{song.extractedName}</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  Requested by {song.addedBy}
+                                </p>
+                              </div>
+
+                            </div>
+                          ))}
+                        </ScrollArea>
+                      </SheetDescription>
+                    </SheetHeader>
+                  </SheetContent>
+                </Sheet>
+              </div>
+              <div className="flex space-x-2">
+                <Input
+                  type="text"
+                  placeholder="Enter YouTube link"
+                  value={youtubeLink}
+                  onChange={(e) => setYoutubeLink(e.target.value)}
+                />
+                <Button
+                  onClick={handleAddSong}
+                  disabled={!youtubeLink || !youtubeurl.valid(youtubeLink)}
+                >
+                  Add Song
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
+              {currentlyPlaying ? (
+                <YouTubeEmbed
+                  currentlyPlaying={currentlyPlaying}
+                  setCurrentlyPlaying={setCurrentlyPlaying}
+                  websocket={ws.current}
+                />
+              ) : (
+                <p>No song is currently playing</p>
+              )}
+            </Card>
+
             <div className="flex space-x-2">
-              <Input
-                type="text"
-                placeholder="Enter YouTube link"
-                value={youtubeLink}
-                onChange={(e) => setYoutubeLink(e.target.value)}
-              />
-              <Button
-                onClick={handleAddSong}
-                disabled={!youtubeLink || !youtubeurl.valid(youtubeLink)}
-              >
-                Add Song
+              <Button className="flex-1" onClick={shareStream}>
+                <Share2 /> Share Stream
+              </Button>
+              <Button className="flex-1 border-red-400 text-red-600 hover:text-red-600" variant={"outline"} onClick={leaveRoom}>
+                <DoorOpenIcon />
+                Leave Stream
               </Button>
             </div>
-          </Card>
-
-          <Card className="p-4">
-            <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
-            {currentlyPlaying ? (
-              <LiteYouTubeEmbed
-                id={currentlyPlaying.extractedId}
-                title={currentlyPlaying.extractedName}
-              />
-            ) : (
-              <p>No song is currently playing</p>
-            )}
-          </Card>
-
-          <div className="flex space-x-2">
-            <Button className="flex-1" onClick={shareStream}>
-              <Share2 /> Share Stream
-            </Button>
-            <Button className="flex-1 border-red-400 text-red-600 hover:text-red-600" variant={"outline"} onClick={leaveRoom}>
-              <DoorOpenIcon />
-              Leave Stream
-            </Button>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
