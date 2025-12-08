@@ -121,7 +121,7 @@ wss.on("connection", (ws: WebSocket) => {
                     }));
                 });
 
-                roomMap.get(parsed.roomId)!.clear();
+                roomMap.delete(parsed.roomId);
                 break;
             case IncomingMessageTypes.join_room: // this type will only work when the stream is active
                 if (!roomMap.has(parsed.roomId)) {
