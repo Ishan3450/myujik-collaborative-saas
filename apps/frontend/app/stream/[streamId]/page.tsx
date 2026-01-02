@@ -28,6 +28,18 @@ import youtubeurl from "youtube-url";
 import { YouTubeEmbed } from "@/components/YoutubeEmbed";
 import UserStreamConfigDialog from "@/components/UserStreamConfigDialog";
 
+/**
+ * Renders the participant view for a music stream identified by `streamId`.
+ *
+ * Manages a WebSocket connection to join the stream room, receive real-time
+ * updates to the song queue and playback state, send song add/upvote/leave
+ * events, and provide UI for adding songs, viewing history, sharing the
+ * stream, and leaving the stream.
+ *
+ * @param params - Route params object
+ * @param params.streamId - The stream room identifier to join
+ * @returns The rendered participant UI for the specified music stream
+ */
 export default function MusicStreamParticipant({
   params,
 }: {

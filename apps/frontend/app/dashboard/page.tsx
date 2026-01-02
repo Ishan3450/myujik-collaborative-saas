@@ -27,6 +27,13 @@ import {
 import youtubeurl from "youtube-url";
 import { YouTubeEmbed } from "@/components/YoutubeEmbed";
 
+/**
+ * Manage and render the owner's music streaming room, including UI, WebSocket synchronization, queue/history management, and playback controls.
+ *
+ * This component opens and maintains a WebSocket connection for the owner, handles room lifecycle events (create/join/leave/end), synchronizes the song queue and previously played history with the server, provides controls to add/upvote songs, advance or control playback, and exposes a shareable stream URL.
+ *
+ * @returns The JSX element for the owner's music stream management interface.
+ */
 export default function MusicStreamOwner() {
   const session: any = useSession();
   const ws = useRef<WebSocket | null>(null);

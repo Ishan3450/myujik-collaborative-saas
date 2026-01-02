@@ -268,7 +268,12 @@ wss.on("connection", (ws: WebSocket) => {
 })
 
 // Currently this function handles the play_next_song logic also, kept it here only
-// I feel that it has to be separate type when processing increases but as of now this is what we have :)
+/**
+ * Persists the room's song lists to cache and broadcasts an "update_list" message to all connected users in the room.
+ *
+ * @param roomId - The identifier of the room whose participants should receive the update.
+ * @param updateCurrentPlayingSong - When a `SongExtended` is provided, includes `currentlyPlaying` in the payload with that value; when `false`, omits `currentlyPlaying`.
+ */
 function broadcastToRoomUsers(roomId: string, updateCurrentPlayingSong: SongExtended | boolean = false) {
     const roomUsers = roomMap.get(roomId)!;
     const songsList = songsMap.get(roomId)!;

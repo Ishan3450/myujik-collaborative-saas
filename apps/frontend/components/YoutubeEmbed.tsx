@@ -25,6 +25,22 @@ interface YouTubeEmbedProps {
     isAdmin?: boolean;
 }
 
+/**
+ * Render a synchronized YouTube player with drift detection and optional admin controls.
+ *
+ * The component syncs playback with a shared stream (listening for `song_state_play` and `song_state_pause`
+ * messages over the provided WebSocket), detects drift of 5 seconds or more and offers a manual sync,
+ * and exposes admin-only play/pause and next-song behavior via the provided handlers.
+ *
+ * @param currentlyPlaying - The currently playing song and its stream state/timestamps.
+ * @param setCurrentlyPlaying - Setter to update the currently playing song state.
+ * @param handlePlayNext - Optional callback to advance to the next song (invoked by admins).
+ * @param websocket - Optional WebSocket used to receive global stream state messages.
+ * @param handlePauseSong - Optional callback invoked to pause the stream (admin action).
+ * @param handlePlaySong - Optional callback invoked to play/resume the stream (admin action).
+ * @param isAdmin - Whether the current user has admin controls (default: `false`).
+ * @returns A JSX element rendering the synchronized YouTube player, stream status, and controls.
+ */
 export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlayNext, websocket, handlePauseSong, handlePlaySong, isAdmin = false }: YouTubeEmbedProps): JSX.Element {
     const [player, setPlayer] = useState<YouTubePlayer | null>(null);
     const [isSongPlaying, setIsSongPlaying] = useState<boolean>(currentlyPlaying.isPlaying);

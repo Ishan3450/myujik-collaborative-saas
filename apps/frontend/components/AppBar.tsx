@@ -6,6 +6,15 @@ import Link from "next/link";
 import { Button } from "./ui/button";
 import { useRouter } from "next/navigation";
 
+/**
+ * Top navigation bar for the application.
+ *
+ * Renders the brand link, primary navigation anchors (Features, How It Works, Pricing),
+ * and authentication controls that vary by session status: a spinner while loading,
+ * a Dashboard and Sign out button when authenticated with a user, and a Sign in button otherwise.
+ *
+ * @returns A JSX.Element representing the app's header containing brand, navigation links, and auth controls.
+ */
 export function AppBar(): JSX.Element {
   const session = useSession();
   const router = useRouter();

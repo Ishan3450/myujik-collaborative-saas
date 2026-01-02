@@ -30,6 +30,14 @@ interface UserStreamConfigDialogProps {
     setShowDialog: Dispatch<SetStateAction<boolean>>;
 }
 
+/**
+ * Render a modal dialog that prompts the user to enable unmuted autoplay for a specific stream.
+ *
+ * @param streamId - Identifier of the target stream (used for context; not modified)
+ * @param showDialog - Whether the dialog is visible
+ * @param setShowDialog - State setter to toggle the dialog visibility
+ * @returns A dialog element with actions to navigate back on cancel or close the dialog to enable audio
+ */
 export default function UserStreamConfigDialog({ streamId, showDialog, setShowDialog }: UserStreamConfigDialogProps) {
     const router = useRouter();
 
