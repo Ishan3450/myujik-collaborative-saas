@@ -116,6 +116,12 @@ export default function MusicStreamOwner() {
     previouslyPlayedSongsRef.current = previouslyPlayedSongs;
   }, [songs, previouslyPlayedSongs]);
 
+  useEffect(() => {
+    if (!currentlyPlaying && songs.length > 0) {
+      handlePlayNext();
+    }
+  }, [currentlyPlaying, songs]);
+
   async function startWsConnection() {
     return new Promise<void>((resolve) => {
       ws.current = new WebSocket("ws://localhost:8080");
@@ -133,8 +139,6 @@ export default function MusicStreamOwner() {
       songs: songsRef.current,
       previouslyPlayedSongs: previouslyPlayedSongsRef.current,
     }));
-    ws.current?.removeEventListener("message", wsMessageHandlerRef.current);
-    ws.current = null;
   }
 
   const handleAddSong = async () => {
@@ -204,6 +208,8 @@ export default function MusicStreamOwner() {
       roomId: session.data?.user?.id,
       id: session.data?.user?.id
     }));
+    ws.current?.removeEventListener("message", wsMessageHandlerRef.current);
+    ws.current = null;
   }
 
   const handlePlaySong = (songResumedTime: number) => {

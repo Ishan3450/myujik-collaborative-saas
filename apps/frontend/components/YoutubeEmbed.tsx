@@ -82,29 +82,45 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
     }, [currentlyPlaying]);
 
     useEffect(() => {
-        songResumedTimeRef.current = currentlyPlaying.songResumedTime;
         const syncAndPlay = async () => {
             if (!player) return;
+
+            /**
+             * Update songResumedTimeRef to the latest resumed time—this is important for accurate sync when participants
+             * newly join or rejoin the stream. It ensures the player can correctly calculate time since resuming, even
+             * song has been played -> paused -> played multiple times.
+             *
+             * Example:
+             *   - Song is paused at 30s, then played again at 9:45:46 AM
+             *   - songResumedTime is set to 30s
+             *   - If a participant joins after this resume, we update the ref to 30s, so their player can sync accurately.
+             */
+            songResumedTimeRef.current = currentlyPlaying.songResumedTime;
 
             // This block will be particularly useful when participants join or rejoin the stream
             if ((Date.now() - currentlyPlayingRef.current.playedAt) >= 5000) {
                 await syncPlayer();
             }
-
-            if (currentlyPlayingRef.current.isPlaying) await player.playVideo();
-            if (!currentlyPlayingRef.current.isPlaying) await player.pauseVideo();
-        };
+        }
         syncAndPlay();
     }, [player]);
 
-    const handleReady = (event: YouTubeEvent) => {
+    const handleReady = async (event: YouTubeEvent) => {
         setIsSongPlaying(false);
+        const newPlayer = event.target;
         setPlayer(prev => {
             prev?.destroy();
-            return event.target;
+            return newPlayer;
         });
         if (isDriftNeededRef.current || driftNeededCheckIntervalId.current) {
             stopDriftCheckInterval();
+        }
+
+        if (currentlyPlayingRef.current.isPlaying) {
+            // Wait a bit for the player to be fully ready, then play
+            setTimeout(async () => {
+                await newPlayer.playVideo();
+            }, 500);
         }
     };
 
@@ -126,18 +142,19 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
         setIsSongPlaying(false);
         stopDriftCheckInterval();
 
-        if (isAdmin) {
-            /*
-             * Skip to next song only if player is in sync.
-             * If drift is detected, will auto sync before
-             * advancing to prevent inconsistent playback states
-             * across clients.
-             */
-            if (isDriftNeededRef.current || (await checkDriftNeeded())) {
-                await syncPlayer();
-                return;
-            }
-            if (handlePlayNext) handlePlayNext();
+        /*
+         * Skip to next song only if player is in sync.
+         * If drift is detected, will auto sync before
+         * advancing to prevent inconsistent playback states
+         * across clients.
+         */
+        if (isDriftNeededRef.current || (await checkDriftNeeded())) {
+            await syncPlayer();
+            return;
+        }
+
+        if (isAdmin && handlePlayNext) {
+            handlePlayNext();
         }
     };
 
