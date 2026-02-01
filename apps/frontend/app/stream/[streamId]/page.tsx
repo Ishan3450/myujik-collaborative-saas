@@ -82,7 +82,13 @@ export default function MusicStreamParticipant({
 
   useEffect(() => {
     wsMessageHandlerRef.current = (event: MessageEvent) => {
-      const message: Message = JSON.parse(event.data);
+      let message: Message;
+      try {
+        message = JSON.parse(event.data);
+      } catch (error) {
+        console.error("Failed to parse WebSocket message:", error);
+        return;
+      }
 
       if (message.type === "room_not_exist") {
         toast.error("Room does not exists");
@@ -117,12 +123,34 @@ export default function MusicStreamParticipant({
   }, [songs, previouslyPlayedSongs]);
 
   async function startWsConnection() {
-    return new Promise<void>((resolve) => {
-      ws.current = new WebSocket("ws://localhost:8080");
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+        if (!wsUrl) {
+          toast.error("Something went wrong from our side");
+          reject(new Error("WebSocket URL not found"));
+          return;
+        }
+        ws.current = new WebSocket(wsUrl);
 
-      ws.current.onopen = () => {
-        resolve();
-      };
+        ws.current.onopen = () => {
+          resolve();
+        };
+
+        ws.current.onerror = (error) => {
+          console.error("WebSocket connection error:", error);
+          toast.error("Failed to connect to stream server");
+          reject(error);
+        };
+
+        ws.current.onclose = () => {
+          console.log("WebSocket connection closed");
+        };
+      } catch (error) {
+        console.error("Error creating WebSocket:", error);
+        toast.error("Failed to create stream connection");
+        reject(error);
+      }
     });
   }
 

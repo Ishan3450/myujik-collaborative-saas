@@ -1,5 +1,6 @@
 import { WebSocket } from "ws";
 import getRedisClient from "@repo/redis-client";
+import "dotenv/config";
 
 // @ts-ignore
 import youtubesearchapi from "youtube-search-api";
@@ -73,7 +74,10 @@ type IncomingMessage = {
 
 
 const redisClient = getRedisClient();
-const wss = new WebSocket.Server({ port: 8080 }); // currently hardcoded, but in future confiure .env enviroment
+const PORT = parseInt(process.env.WS_PORT ?? "8080", 10);
+const wss = new WebSocket.Server({ port: PORT });
+
+console.log(`WebSocket server started on port ${PORT}`);
 
 const socketMap = new Map<string, WebSocket>(); // user id => socket obj
 const roomMap = new Map<string, Set<WebSocket>>(); // room id => set<socket obj> (people in the room)
@@ -84,8 +88,23 @@ const roomToCurrentPlayingSong = new Map<string, SongExtended>(); // room id => 
 wss.on("connection", (ws: WebSocket) => {
     console.log("New client connected");
 
+    ws.on("error", (error) => {
+        console.error("WebSocket error:", error);
+    });
+
+    ws.on("close", () => {
+        console.log("Client disconnected");
+    });
+
     ws.on("message", async (data) => {
-        const parsed: IncomingMessage = JSON.parse(data.toString()); // toString() because data type is object and contains <Buffer ...> data
+        let parsed: IncomingMessage;
+        try {
+            parsed = JSON.parse(data.toString()); // toString() because data type is object and contains <Buffer ...> data
+        } catch (error) {
+            console.error("Failed to parse WebSocket message:", error);
+            ws.send(JSON.stringify({ type: "error", message: "Invalid message format" }));
+            return;
+        }
 
         switch (parsed.type) {
             case IncomingMessageTypes.owner_create_room:

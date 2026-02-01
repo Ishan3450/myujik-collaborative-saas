@@ -145,8 +145,8 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
         /*
          * Skip to next song only if player is in sync.
          * If drift is detected, will auto sync before
-         * advancing to prevent inconsistent playback states
-         * across clients.
+         * advancing to prevent inconsistent playback
+         * states across clients.
          */
         if (isDriftNeededRef.current || (await checkDriftNeeded())) {
             await syncPlayer();

@@ -9,7 +9,7 @@ const handler = NextAuth({
             clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? ""
         })
     ],
-    secret: process.env.NEXTAUTH_SECRET ?? "secret",
+    secret: process.env.NEXTAUTH_SECRET,
     callbacks: {
         async signIn(params) {
             try {
@@ -29,7 +29,7 @@ const handler = NextAuth({
                 params.user.id = user.id;
                 return true;
             } catch (error) {
-                console.log(error);
+                console.error("Error during sign-in:", error);
                 return false;
             }
         },
