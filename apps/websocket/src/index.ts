@@ -1,89 +1,24 @@
-import { WebSocket } from "ws";
-import getRedisClient from "@repo/redis-client";
+import { WebSocket, WebSocketServer } from "ws";
+import { getRedisClient } from "@repo/redis-client";
 import "dotenv/config";
+import type { Song, SongExtended, ClientMessage, ServerMessage } from "@repo/shared-types";
+import sendWebsocketMessage from "./lib/websocket.js";
 
 // @ts-ignore
 import youtubesearchapi from "youtube-search-api";
 
-// Song and SongExtended both duplicated from apps/types/index.d.ts so in future make a common solution for this
-export type Song = {
-    extractedId: string;
-    extractedThumbnail: string;
-    extractedName: string;
-    addedBy: string;
-    votes: string[];
-};
-type SongExtended = Song & {
-    playedAt: number; // time in unix form (server time)
-    isPlaying: boolean; // flag telling whether the song is in playing or pause state
-    songResumedTime: number; // elapsed seconds since the song started playing or was last resumed
-};
-
-enum IncomingMessageTypes {
-    owner_create_room = "owner_create_room",
-    owner_ended_stream = "owner_ended_stream",
-    join_room = "join_room",
-    leave_room = "leave_room",
-    add_song = "add_song",
-    update_songs_list = "update_songs_list",
-    play_next_song = "play_next_song",
-    song_state_play = "song_state_play",
-    song_state_pause = "song_state_pause",
-    song_queue_concluded = "song_queue_concluded",
-}
-type IncomingMessage = {
-    type: IncomingMessageTypes.owner_create_room,
-    id: string,
-} | {
-    type: IncomingMessageTypes.owner_ended_stream,
-    roomId: string,
-    songs: Song[],
-    previouslyPlayedSongs: Song[],
-} | {
-    type: IncomingMessageTypes.join_room,
-    id: string,
-    roomId: string,
-} | {
-    type: IncomingMessageTypes.leave_room,
-    id: string,
-    roomId: string,
-} | {
-    type: IncomingMessageTypes.add_song,
-    roomId: string,
-    addedBy: string,
-    extractedId: string,
-} | {
-    type: IncomingMessageTypes.update_songs_list,
-    songs: Song[],
-    roomId: string,
-    updatedHistory: Song[],
-} | {
-    type: IncomingMessageTypes.play_next_song,
-    songToPlay: Song,
-    roomId: string,
-    updatedList: Song[],
-    updatedHistory: Song[],
-} | {
-    type: IncomingMessageTypes.song_state_play,
-    roomId: string,
-    songResumedTime: number,
-} | {
-    type: IncomingMessageTypes.song_state_pause | IncomingMessageTypes.song_queue_concluded,
-    roomId: string,
-}
-
 
 const redisClient = getRedisClient();
 const PORT = parseInt(process.env.WS_PORT ?? "8080", 10);
-const wss = new WebSocket.Server({ port: PORT });
+const wss = new WebSocketServer({ port: PORT });
 
 console.log(`WebSocket server started on port ${PORT}`);
 
-const socketMap = new Map<string, WebSocket>(); // user id => socket obj
-const roomMap = new Map<string, Set<WebSocket>>(); // room id => set<socket obj> (people in the room)
-const songsMap = new Map<string, Song[]>(); // room id => array<songs>
-const songsHistoryMap = new Map<string, Song[]>(); // room id => array<songs>
-const roomToCurrentPlayingSong = new Map<string, SongExtended>(); // room id => Current Playing Song with some additional fields
+const userSocketMap = new Map<string, WebSocket>(); // user id => socket obj
+const roomUsersMap = new Map<string, Set<WebSocket>>(); // room id => set<socket obj> (people in the room)
+const roomSongsMap = new Map<string, Song[]>(); // room id => array<songs>
+const roomSongsHistoryMap = new Map<string, Song[]>(); // room id => array<songs>
+const roomCurrentPlayingSongMap = new Map<string, SongExtended>(); // room id => Current Playing Song with some additional fields
 
 wss.on("connection", (ws: WebSocket) => {
     console.log("New client connected");
@@ -93,24 +28,30 @@ wss.on("connection", (ws: WebSocket) => {
     });
 
     ws.on("close", () => {
+        cleanupSocket(ws, null, false);
         console.log("Client disconnected");
     });
 
     ws.on("message", async (data) => {
-        let parsed: IncomingMessage;
+        let parsed: ClientMessage;
         try {
             parsed = JSON.parse(data.toString()); // toString() because data type is object and contains <Buffer ...> data
         } catch (error) {
             console.error("Failed to parse WebSocket message:", error);
-            ws.send(JSON.stringify({ type: "error", message: "Invalid message format" }));
             return;
         }
 
         switch (parsed.type) {
-            case IncomingMessageTypes.owner_create_room:
-                // check if socket map contains curr user id if not then set it
-                if (!socketMap.has(parsed.id)) {
-                    socketMap.set(parsed.id, ws);
+            case "owner_create_room": {
+                // Prevent creating a new room if one is already active with this ID
+                if (userSocketMap.has(parsed.id)) {
+                    sendWebsocketMessage(ws, {
+                        type: "left_room",
+                    });
+                    return;
+                }
+                if (!userSocketMap.has(parsed.id)) {
+                    userSocketMap.set(parsed.id, ws);
                 }
 
                 // fetch any previous unplayed songs' list if there
@@ -132,73 +73,92 @@ wss.on("connection", (ws: WebSocket) => {
                     previouslyPlayedSongs = [];
                 }
 
-                // check if room is already there or not from the roomMap
-                // if not then create the room and add the curr user socket to the roommap
-                if (!roomMap.has(parsed.id)) {
-                    roomMap.set(parsed.id, new Set());
+                // check if room is already there or not from the roomUsersMap
+                // if not then create the room and add the curr user socket to the roomUsersmap
+                let roomUsers = roomUsersMap.get(parsed.id);
+                if (!roomUsers) {
+                    roomUsers = new Set();
+                    roomUsersMap.set(parsed.id, roomUsers);
                 }
-                roomMap.get(parsed.id)!.add(ws);
-                songsMap.set(parsed.id, songsList);
-                songsHistoryMap.set(parsed.id, previouslyPlayedSongs);
+                roomUsers.add(ws);
+                roomSongsMap.set(parsed.id, songsList);
+                roomSongsHistoryMap.set(parsed.id, previouslyPlayedSongs);
 
                 console.log(`Room created by id ${parsed.id}`);
 
-                ws.send(JSON.stringify({
+                sendWebsocketMessage(ws, {
                     type: "room_created",
                     songs: songsList,
                     previouslyPlayedSongs: previouslyPlayedSongs,
-                }))
+                });
                 break;
-            case IncomingMessageTypes.owner_ended_stream:
+            }
+            case "owner_ended_stream": {
                 console.log(`Closing stream for ${parsed.roomId}`);
 
                 saveSongListToCache(parsed.roomId, parsed.songs);
                 saveSongHistoryToCache(parsed.roomId, parsed.previouslyPlayedSongs);
-                roomToCurrentPlayingSong.delete(parsed.roomId);
+                roomCurrentPlayingSongMap.delete(parsed.roomId);
 
-                const roomUsers = roomMap.get(parsed.roomId)!;
+                const roomUsers = roomUsersMap.get(parsed.roomId);
+                if (!roomUsers) {
+                    return logAndReturnWarning(`[OWNER ENDED STREAM] Room users not found for roomId: ${parsed.roomId}`);
+                }
                 roomUsers.forEach(user => {
-                    user.send(JSON.stringify({
+                    sendWebsocketMessage(user, {
                         type: "left_room",
-                    }));
+                    });
                 });
-
-                roomMap.delete(parsed.roomId);
+                /**
+                 * Here not calling: roomUsersMap.delete(parsed.roomId);
+                 * 
+                 * Reason: it will trigger follow up event of leave_room and at there if we delete this then users
+                 * will not be found there and there will be unnecessary sockets lying in the userSocketMap.
+                 */
                 break;
-            case IncomingMessageTypes.join_room: // this type will only work when the stream is active
-                if (!roomMap.has(parsed.roomId)) {
-                    ws.send(JSON.stringify({
+            }
+            case "join_room": {
+                // Prevent user from joining multiple rooms simultaneously
+                if (userSocketMap.has(parsed.id)) {
+                    sendWebsocketMessage(ws, {
+                        type: "left_room",
+                    });
+                    return;
+                }
+                const roomUsers = roomUsersMap.get(parsed.roomId);
+                if (!roomUsers || parsed.id === parsed.roomId) {
+                    sendWebsocketMessage(ws, {
                         type: "room_not_exist",
-                    }))
+                    });
                     return;
                 }
 
-                // if exists then add the curr ws to the roomMap
-                roomMap.get(parsed.roomId)!.add(ws);
-
-                if (!socketMap.has(parsed.id)) socketMap.set(parsed.id, ws);
+                // if exists then add the curr ws to the roomUsersMap
+                roomUsers.add(ws);
+                if (!userSocketMap.has(parsed.id)) userSocketMap.set(parsed.id, ws);
 
                 // send the song lists of the room
-                ws.send(JSON.stringify({
+                sendWebsocketMessage(ws, {
                     type: "joined_room",
-                    songs: songsMap.get(parsed.roomId),
-                    previouslyPlayedSongs: songsHistoryMap.get(parsed.roomId),
-                    currentlyPlaying: roomToCurrentPlayingSong.get(parsed.roomId),
-                }))
+                    songs: roomSongsMap.get(parsed.roomId) ?? [],
+                    previouslyPlayedSongs: roomSongsHistoryMap.get(parsed.roomId) ?? [],
+                    currentlyPlaying: roomCurrentPlayingSongMap.get(parsed.roomId),
+                });
                 break;
-            case IncomingMessageTypes.leave_room:
-                if (roomMap.has(parsed.roomId)) {
-                    roomMap.get(parsed.roomId)!.delete(ws);
-                }
-                socketMap.delete(parsed.id);
+            }
+            case "leave_room": {
+                cleanupSocket(ws, parsed.roomId);
                 break;
-            case IncomingMessageTypes.add_song:
+            }
+            case "add_song": {
                 const extractedId = parsed.extractedId;
+                const roomSongs = roomSongsMap.get(parsed.roomId);
 
-                if (songsMap.get(parsed.roomId)?.some(song => song.extractedId === extractedId)) {
-                    // prevents duplication of song
-                    console.log("Duplicate song request received.");
-                    return;
+                if (!roomSongs) {
+                    return logAndReturnWarning(`[ADD SONG] Room songs not found for roomId: ${parsed.roomId}`);
+                }
+                if (roomSongs.some(song => song.extractedId === extractedId)) {
+                    return logAndReturnWarning(`[ADD SONG] Duplicate song request`);
                 }
 
                 let videoDetails;
@@ -218,7 +178,7 @@ wss.on("connection", (ws: WebSocket) => {
                     videoDetails.thumbnail.thumbnails.length > 0 &&
                     videoDetails.thumbnail.thumbnails[0].url
                 ) {
-                    songsMap.get(parsed.roomId)!.push({
+                    roomSongs.push({
                         extractedId,
                         extractedName: videoDetails.title,
                         extractedThumbnail: videoDetails.thumbnail.thumbnails[0].url,
@@ -232,116 +192,167 @@ wss.on("connection", (ws: WebSocket) => {
                     console.log("Invalid video details received from API.");
                 }
                 break;
-            case IncomingMessageTypes.update_songs_list:
-                songsMap.set(parsed.roomId, parsed.songs);
-                songsHistoryMap.set(parsed.roomId, parsed.updatedHistory);
+            }
+            case "update_songs_list": {
+                roomSongsMap.set(parsed.roomId, parsed.songs);
+                if (parsed.updatedHistory) {
+                    roomSongsHistoryMap.set(parsed.roomId, parsed.updatedHistory);
+                }
                 broadcastToRoomUsers(parsed.roomId);
                 break;
-            case IncomingMessageTypes.play_next_song:
-                {
-                    const songToBePlayed: SongExtended = {
-                        ...parsed.songToPlay,
-                        playedAt: Date.now(),
-                        isPlaying: true, // default true because to enable autoplay
-                        songResumedTime: 0, // Set to 0 since the song is starting from the beginning
-                    }
-
-                    // store the starting time of the play of song in room
-                    roomToCurrentPlayingSong.set(parsed.roomId, songToBePlayed);
-
-                    songsMap.set(parsed.roomId, parsed.updatedList);
-                    songsHistoryMap.set(parsed.roomId, parsed.updatedHistory);
-
-                    broadcastToRoomUsers(parsed.roomId, songToBePlayed);
+            }
+            case "play_next_song": {
+                const songToBePlayed: SongExtended = {
+                    ...parsed.songToPlay,
+                    playedAt: Date.now(),
+                    isPlaying: true, // default true because to enable autoplay
+                    songResumedTime: 0, // Set to 0 since the song is starting from the beginning
                 }
-                break;
-            case IncomingMessageTypes.song_state_pause:
-                if (roomMap.has(parsed.roomId) && roomToCurrentPlayingSong.has(parsed.roomId)) {
-                    roomToCurrentPlayingSong.get(parsed.roomId)!.isPlaying = false;
 
-                    const roomUsers = roomMap.get(parsed.roomId);
-                    roomUsers?.forEach(user => {
-                        if (user.readyState === WebSocket.OPEN) {
-                            try {
-                                user.send(JSON.stringify({
-                                    type: "song_state_pause",
-                                }));
-                            } catch (error) {
-                                console.error("Error sending pause state to user:", error);
-                            }
-                        }
-                    })
+                // store the starting time of the play of song in room
+                roomCurrentPlayingSongMap.set(parsed.roomId, songToBePlayed);
+
+                roomSongsMap.set(parsed.roomId, parsed.updatedList);
+                roomSongsHistoryMap.set(parsed.roomId, parsed.updatedHistory);
+
+                broadcastToRoomUsers(parsed.roomId, songToBePlayed);
+                break;
+            }
+            case "song_state_pause": {
+                const roomUsers = roomUsersMap.get(parsed.roomId);
+                const roomCurrentlyPlayingSong = roomCurrentPlayingSongMap.get(parsed.roomId);
+
+                if (!roomUsers) {
+                    return logAndReturnWarning(`[SONG STATE PAUSE] Room users not found for roomId: ${parsed.roomId}`);
                 }
-                break;
-            case IncomingMessageTypes.song_state_play:
-                if (roomMap.has(parsed.roomId) && roomToCurrentPlayingSong.has(parsed.roomId)) {
-                    const updatedPlayTime = Date.now();
-                    const currentlyPlayingSong = roomToCurrentPlayingSong.get(parsed.roomId)!;
-
-                    currentlyPlayingSong.isPlaying = true;
-                    currentlyPlayingSong.playedAt = updatedPlayTime;
-                    currentlyPlayingSong.songResumedTime = parsed.songResumedTime;
-
-                    const roomUsers = roomMap.get(parsed.roomId);
-                    roomUsers?.forEach(user => {
-                        if (user.readyState === WebSocket.OPEN) {
-                            try {
-                                user.send(JSON.stringify({
-                                    type: "song_state_play",
-                                    updatedPlayTime: updatedPlayTime,
-                                }));
-                            } catch (error) {
-                                console.error("Error sending play state to user:", error);
-                            }
-                        }
-                    })
+                if (!roomCurrentlyPlayingSong) {
+                    return logAndReturnWarning(`[SONG STATE PAUSE] No currently playing song found for roomId: ${parsed.roomId}`);
                 }
-                break;
-            case IncomingMessageTypes.song_queue_concluded:
-                roomToCurrentPlayingSong.delete(parsed.roomId);
-
-                roomMap.get(parsed.roomId)?.forEach(roomParticipant => {
-                    if (roomParticipant.readyState === WebSocket.OPEN) {
-                        try {
-                            roomParticipant.send(
-                                JSON.stringify({
-                                    type: "song_queue_concluded",
-                                })
-                            );
-                        } catch (error) {
-                            console.error("Error sending queue to user:", error);
-                        }
-                    }
+                roomCurrentlyPlayingSong.isPlaying = false;
+                roomUsers.forEach(user => {
+                    sendWebsocketMessage(user, {
+                        type: "song_state_pause",
+                    });
                 });
                 break;
+            }
+            case "song_state_play": {
+                const roomUsers = roomUsersMap.get(parsed.roomId);
+                const roomCurrentlyPlayingSong = roomCurrentPlayingSongMap.get(parsed.roomId);
+
+                if (!roomUsers) {
+                    return logAndReturnWarning(`[SONG STATE PLAY] Room users not found for roomId: ${parsed.roomId}`);
+                }
+                if (!roomCurrentlyPlayingSong) {
+                    return logAndReturnWarning(`[SONG STATE PLAY] No currently playing song found for roomId: ${parsed.roomId}`);
+                }
+
+                const updatedPlayTime = Date.now();
+
+                roomCurrentlyPlayingSong.isPlaying = true;
+                roomCurrentlyPlayingSong.playedAt = updatedPlayTime;
+                roomCurrentlyPlayingSong.songResumedTime = parsed.songResumedTime;
+
+                roomUsers.forEach(user => {
+                    sendWebsocketMessage(user, {
+                        type: "song_state_play",
+                        updatedPlayTime: updatedPlayTime,
+                    });
+                });
+                break;
+            }
+            case "song_queue_concluded": {
+                const roomUsers = roomUsersMap.get(parsed.roomId);
+                if (!roomUsers) {
+                    return logAndReturnWarning(`[SONG QUEUE CONCLUDED] Room users not found for roomId: ${parsed.roomId}`);
+                }
+                roomCurrentPlayingSongMap.delete(parsed.roomId);
+                roomUsers.forEach(roomParticipant => {
+                    sendWebsocketMessage(roomParticipant, {
+                        type: "song_queue_concluded",
+                    });
+                });
+                break;
+            }
         }
     })
 })
 
 // Currently this function handles the play_next_song logic also, kept it here only
 // I feel that it has to be separate type when processing increases but as of now this is what we have :)
-function broadcastToRoomUsers(roomId: string, updateCurrentPlayingSong: SongExtended | boolean = false) {
-    const roomUsers = roomMap.get(roomId)!;
-    const songsList = songsMap.get(roomId)!;
-    const previouslyPlayedSongs = songsHistoryMap.get(roomId)!;
+function broadcastToRoomUsers(roomId: string, updateCurrentPlayingSong: SongExtended | null = null) {
+    const roomUsers = roomUsersMap.get(roomId);
+    const songsList = roomSongsMap.get(roomId);
+    const previouslyPlayedSongs = roomSongsHistoryMap.get(roomId);
+
+    if (!roomUsers) {
+        return logAndReturnWarning(`[BROADCAST] Room users not found for roomId: ${roomId}`);
+    }
+    if (!songsList) {
+        return logAndReturnWarning(`[BROADCAST] Songs list not found for roomId: ${roomId}`);
+    }
+    if (!previouslyPlayedSongs) {
+        return logAndReturnWarning(`[BROADCAST] Song history not found for roomId: ${roomId}`);
+    }
+
     saveSongListToCache(roomId, songsList);
     saveSongHistoryToCache(roomId, previouslyPlayedSongs);
 
-    const obj = JSON.stringify({
+    const obj: ServerMessage = {
         type: "update_list",
         songs: songsList,
         previouslyPlayedSongs,
         ...(updateCurrentPlayingSong && { currentlyPlaying: updateCurrentPlayingSong })
-    });
+    };
     roomUsers.forEach(user => {
-        if (user.readyState === WebSocket.OPEN) {
-            try {
-                user.send(obj);
-            } catch (error) {
-                console.error("Error sending message to user:", error);
+        sendWebsocketMessage(user, obj);
+    });
+}
+
+function logAndReturnWarning(message: string): void {
+    console.warn(message);
+}
+
+function cleanupSocket(ws: WebSocket, roomId: string | null = null, logs: boolean = true) {
+    let roomUsers: Set<WebSocket> | undefined = undefined;
+    let userId: string | null = null;
+    for (const [uid, socket] of userSocketMap.entries()) {
+        if (ws === socket) {
+            userSocketMap.delete(uid);
+            userId = uid;
+            break;
+        }
+    }
+    if (!userId) {
+        if (logs) {
+            return logAndReturnWarning("[CLEANUPSOCKET] userId not found for socket.");
+        }
+        return;
+    }
+    if (roomId) {
+        roomUsers = roomUsersMap.get(roomId);
+    } else {
+        for (const [_roomId, participants] of roomUsersMap.entries()) {
+            if (participants.has(ws)) {
+                roomUsers = participants;
+                roomId = _roomId;
+                break;
             }
         }
-    });
+    }
+    if (!roomId || !roomUsers) {
+        if (logs) {
+            return logAndReturnWarning(`[CLEANUPSOCKET] Room not found for roomId: ${roomId}, userId: ${userId}`);
+        }
+        return;
+    }
+    roomUsers.delete(ws);
+    if (roomUsers.size === 0) {
+        roomUsersMap.delete(roomId);
+        roomSongsMap.delete(roomId);
+        roomSongsHistoryMap.delete(roomId);
+        roomCurrentPlayingSongMap.delete(roomId);
+    }
 }
 
 // type of songs must be a string, so call a JSON.stringify for songs while calling

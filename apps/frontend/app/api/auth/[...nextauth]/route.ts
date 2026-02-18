@@ -1,6 +1,17 @@
-import prismaClient from '@repo/db';
+import prismaClient from "@repo/db";
 import NextAuth from "next-auth/next";
 import GoogleProvider from "next-auth/providers/google";
+import { type JWT } from "next-auth/jwt";
+import { type DefaultSession, type Session } from "next-auth";
+
+declare module "next-auth" {
+    interface Session {
+        user: {
+            id?: string;
+        } & DefaultSession["user"];
+    }
+}
+
 
 const handler = NextAuth({
     providers: [
@@ -33,10 +44,10 @@ const handler = NextAuth({
                 return false;
             }
         },
-        jwt: ({ token, user }: any) => {
+        jwt: ({ token }: { token: JWT }) => {
             return token;
         },
-        session: ({ session, token }: any) => {
+        session: ({ session, token }: { session: Session; token: JWT }) => {
             if (session && session.user) {
                 session.user.id = token.sub;
             }
