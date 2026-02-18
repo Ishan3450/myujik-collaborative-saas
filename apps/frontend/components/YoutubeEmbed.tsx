@@ -1,9 +1,13 @@
-import { Message, SongExtended } from "@/types";
+import { Dispatch, MutableRefObject, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+
+import type { ServerMessage, SongExtended } from "@repo/shared-types";
 import { Options, YouTubePlayer } from "@/types/YouTube";
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+
 import YouTube, { YouTubeEvent } from "react-youtube";
-import { Button } from "./ui/button";
 import { InfoIcon, PauseIcon, PlayIcon, RefreshCwIcon } from "lucide-react";
+
+import { Button } from "./ui/button";
+import { sendWebsocketMessage } from "@/lib/websocket";
 
 
 const playerOptions: Options = { // https://developers.google.com/youtube/player_parameters#Parameters
@@ -18,29 +22,99 @@ const playerOptions: Options = { // https://developers.google.com/youtube/player
 interface YouTubeEmbedProps {
     currentlyPlaying: SongExtended;
     setCurrentlyPlaying: Dispatch<SetStateAction<SongExtended | null>>;
-    handlePlayNext?: () => void;
-    websocket: WebSocket | null;
-    handlePlaySong?: (songResumedTime: number) => void;
-    handlePauseSong?: () => void;
+    websocket: MutableRefObject<WebSocket | null>;
     isAdmin?: boolean;
+    handlePlayNext?: () => void;
+    streamId: string | undefined;
 }
 
-export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlayNext, websocket, handlePauseSong, handlePlaySong, isAdmin = false }: YouTubeEmbedProps): JSX.Element {
+export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlayNext, websocket, isAdmin = false, streamId }: YouTubeEmbedProps) {
     const [player, setPlayer] = useState<YouTubePlayer | null>(null);
     const [isSongPlaying, setIsSongPlaying] = useState<boolean>(currentlyPlaying.isPlaying);
     const [isStreamPlaying, setIsStreamPlaying] = useState<boolean>(currentlyPlaying.isPlaying);
-    const songResumedTimeRef = useRef<number>(0);
     const [isDriftNeeded, setIsDriftNeeded] = useState<boolean>(false);
+
+    const songResumedTimeRef = useRef<number>(0);
     const isDriftNeededRef = useRef<boolean>(isDriftNeeded);
-    const driftNeededCheckIntervalId = useRef<NodeJS.Timeout | null>(null);
     const currentlyPlayingRef = useRef(currentlyPlaying);
+    const driftNeededCheckIntervalId = useRef<NodeJS.Timeout | null>(null);
+
+    const checkDriftNeeded = useCallback(async (): Promise<boolean> => {
+        if (isDriftNeededRef.current) return true;
+        if (!player) return false;
+        const timePassedSinceSongPlayed = Math.abs(Math.ceil(await player.getCurrentTime()) - songResumedTimeRef.current);
+        const expectedTime = (Date.now() - currentlyPlayingRef.current.playedAt) / 1000;
+        const drift = Math.abs(expectedTime - timePassedSinceSongPlayed);
+
+        if (drift >= 5) {
+            setIsDriftNeeded(true);
+            isDriftNeededRef.current = true;
+
+            if (driftNeededCheckIntervalId.current) {
+                clearInterval(driftNeededCheckIntervalId.current);
+                driftNeededCheckIntervalId.current = null;
+            }
+            return true;
+        }
+        return false;
+    }, [player])
+
+    const startDriftCheckInterval = useCallback(() => {
+        if (driftNeededCheckIntervalId.current) {
+            stopDriftCheckInterval();
+        }
+        driftNeededCheckIntervalId.current = setInterval(checkDriftNeeded, 5000);
+    }, [checkDriftNeeded])
+
+    const syncPlayer = useCallback(async (trigerredFromFrontend = false) => {
+        if (!player) return;
+        const seekToTime = songResumedTimeRef.current + ((Date.now() - currentlyPlayingRef.current.playedAt) / 1000);
+        /*
+         * Here the second argument is passed true because:
+         * - If passed true then at sync the video will continue playing.
+         * - If passed false then at sync the video will seek to that particular
+         *   second but won't continue playing it will be stopped.
+         */
+        await player?.seekTo(Math.min(seekToTime, await player.getDuration()), true);
+        setIsDriftNeeded(false);
+        isDriftNeededRef.current = false;
+
+        // After sync, restart the drift check interval only if trigerred from frontend
+        if (trigerredFromFrontend) {
+            startDriftCheckInterval();
+        }
+    }, [player, startDriftCheckInterval])
 
     useEffect(() => {
-        if (websocket && player) {
+        return () => {
+            // Not calling the stopDriftCheckInterval() here becuase it internally calls
+            // state variable setIsDriftNeeded causing unnecessary render on unmount.
+            if (driftNeededCheckIntervalId.current) {
+                clearInterval(driftNeededCheckIntervalId.current);
+                driftNeededCheckIntervalId.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        const ws = websocket.current;
+        if (ws && player) {
             const handleMessage = async (event: MessageEvent) => {
-                const parsed: Message = JSON.parse(event.data);
+                let parsed: ServerMessage;
+                try {
+                    parsed = JSON.parse(event.data);
+                } catch (error) {
+                    console.error("Failed to parse websocket message:", error);
+                    return;
+                }
 
                 if (parsed.type === "song_state_play") {
+                    // Sync player before updating state to ensure it matches the stream's current position.
+                    // This prevents playback inconsistencies if the player drifted while paused.
+                    if (await checkDriftNeeded()) {
+                        await syncPlayer();
+                    }
+
                     /*
                      * Store the time before player resumes playing
                      * Used to calculate the gap after resume
@@ -52,7 +126,6 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
                     if (playerCurrentlyAt > songResumedTimeRef.current) {
                         songResumedTimeRef.current = playerCurrentlyAt;
                     }
-
                     setCurrentlyPlaying(prev => {
                         if (!prev) return null;
                         return { ...prev, isPlaying: true, playedAt: parsed.updatedPlayTime };
@@ -69,13 +142,13 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
                     setIsStreamPlaying(false);
                 }
             }
-            websocket.addEventListener("message", handleMessage);
+            ws?.addEventListener("message", handleMessage);
 
             return () => {
-                websocket.removeEventListener("message", handleMessage);
+                ws?.removeEventListener("message", handleMessage);
             }
         }
-    }, [websocket, player]);
+    }, [checkDriftNeeded, player, setCurrentlyPlaying, syncPlayer, websocket]);
 
     useEffect(() => {
         currentlyPlayingRef.current = currentlyPlaying;
@@ -86,7 +159,7 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
             if (!player) return;
 
             /**
-             * Update songResumedTimeRef to the latest resumed time—this is important for accurate sync when participants
+             * Update songResumedTimeRef to the latest resumed time, this is important for accurate sync when participants
              * newly join or rejoin the stream. It ensures the player can correctly calculate time since resuming, even
              * song has been played -> paused -> played multiple times.
              *
@@ -98,16 +171,35 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
             songResumedTimeRef.current = currentlyPlaying.songResumedTime;
 
             // This block will be particularly useful when participants join or rejoin the stream
-            if ((Date.now() - currentlyPlayingRef.current.playedAt) >= 5000) {
+            if (await checkDriftNeeded()) {
                 await syncPlayer();
             }
         }
         syncAndPlay();
-    }, [player]);
+    }, [checkDriftNeeded, currentlyPlaying.songResumedTime, player, syncPlayer]);
+
+    const handlePlaySong = (songResumedTime: number) => {
+        if (!currentlyPlaying || !streamId) return;
+
+        sendWebsocketMessage(websocket, {
+            type: "song_state_play",
+            roomId: streamId,
+            songResumedTime: songResumedTime,
+        });
+    }
+
+    const handlePauseSong = () => {
+        if (!currentlyPlaying || !streamId) return;
+
+        sendWebsocketMessage(websocket, {
+            type: "song_state_pause",
+            roomId: streamId,
+        });
+    }
 
     const handleReady = async (event: YouTubeEvent) => {
         setIsSongPlaying(false);
-        const newPlayer = event.target;
+        const newPlayer: YouTubePlayer = event.target;
         setPlayer(prev => {
             prev?.destroy();
             return newPlayer;
@@ -116,14 +208,18 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
             stopDriftCheckInterval();
         }
 
-        if (currentlyPlayingRef.current.isPlaying) {
-            // Wait a bit for the player to be fully ready, then play
-            setTimeout(async () => {
+        // Wait a bit for the player to be fully ready
+        setTimeout(async () => {
+            if (currentlyPlayingRef.current.isPlaying) {
                 await newPlayer.playVideo();
-            }, 500);
-        }
+            } else {
+                await newPlayer.pauseVideo();
+                startDriftCheckInterval(); // manually need to start the drift check as we kind of manually paused the palyer
+            }
+        }, 500); // YouTube iframe API can report ready before internal state is fully initialized, that's why small micro delay is there
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handlePlay = (event: YouTubeEvent<number>) => {
         setIsSongPlaying(true);
 
@@ -134,10 +230,12 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
         }
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handlePause = (event: YouTubeEvent<number>) => {
         setIsSongPlaying(false);
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleEnd = async (event: YouTubeEvent<number>) => {
         setIsSongPlaying(false);
         stopDriftCheckInterval();
@@ -148,7 +246,7 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
          * advancing to prevent inconsistent playback
          * states across clients.
          */
-        if (isDriftNeededRef.current || (await checkDriftNeeded())) {
+        if (await checkDriftNeeded()) {
             await syncPlayer();
             return;
         }
@@ -167,32 +265,6 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
     // const handlePlaybackRateChange = (event: YouTubeEvent<number>) => {};
     // const handlePlaybackQualityChange = (event: YouTubeEvent<string>) => {};
 
-    const startDriftCheckInterval = () => {
-        if (driftNeededCheckIntervalId.current) {
-            stopDriftCheckInterval();
-        }
-        driftNeededCheckIntervalId.current = setInterval(checkDriftNeeded, 5000);
-    }
-
-    const checkDriftNeeded = async (): Promise<boolean> => {
-        if (isDriftNeededRef.current || !player) return false;
-        const timePassedSinceSongPlayed = Math.abs(Math.ceil(await player.getCurrentTime()) - songResumedTimeRef.current);
-        const expectedTime = (Date.now() - currentlyPlayingRef.current.playedAt) / 1000;
-        const drift = Math.abs(expectedTime - timePassedSinceSongPlayed);
-
-        if (drift >= 5) {
-            setIsDriftNeeded(true);
-            isDriftNeededRef.current = true;
-
-            if (driftNeededCheckIntervalId.current) {
-                clearInterval(driftNeededCheckIntervalId.current);
-                driftNeededCheckIntervalId.current = null;
-            }
-            return true;
-        }
-        return false;
-    }
-
     const stopDriftCheckInterval = () => {
         if (driftNeededCheckIntervalId.current) {
             clearInterval(driftNeededCheckIntervalId.current);
@@ -202,31 +274,15 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
         isDriftNeededRef.current = false;
     }
 
-    const syncPlayer = async (trigerredFromFrontend = false) => {
-        if (!player) return;
-        const seekToTime = songResumedTimeRef.current + ((Date.now() - currentlyPlayingRef.current.playedAt) / 1000);
-        /*
-         * Here the second argument is passed true because:
-         * - If passed true then at sync the video will continue playing.
-         * - If passed false then at sync the video will seek to that particular
-         *   second but won't continue playing it will be stopped.
-         */
-        await player?.seekTo(Math.min(seekToTime, await player.getDuration()), true);
-        setIsDriftNeeded(false);
-        isDriftNeededRef.current = false;
-
-        // After sync, restart the drift check interval only if trigerred from frontend
-        if (trigerredFromFrontend) {
-            startDriftCheckInterval();
-        }
-    }
-
     const playSongHandler = async () => {
         if (!player) return;
         const playerCurrentlyAt = await player.getCurrentTime();
-        handlePlaySong!(playerCurrentlyAt);
+        handlePlaySong(playerCurrentlyAt);
     }
 
+    if (!streamId) {
+        return null;
+    }
     return (
         <>
             {!currentlyPlaying.isPlaying && (
@@ -256,7 +312,7 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
                 <h2 className="text-lg font-semibold">Global Stream Controls</h2>
 
                 <div className="mt-2 flex gap-1">
-                    <div className="font-medium">Requested by</div>
+                    <div className="font-medium">Suggested by</div>
                     <div className="text-gray-800 underline">{currentlyPlaying.addedBy}</div>
                 </div>
                 <div className="mt-1 flex gap-1">

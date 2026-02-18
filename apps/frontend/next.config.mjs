@@ -6,6 +6,15 @@ const nextConfig = {
     poweredByHeader: false,
     productionBrowserSourceMaps: false,
     optimizeFonts: true,
+    images: {
+        remotePatterns: [
+            {
+                protocol: "https",
+                hostname: "i.ytimg.com",
+                pathname: "/**",
+            },
+        ],
+    }
 };
 
 export default nextConfig;

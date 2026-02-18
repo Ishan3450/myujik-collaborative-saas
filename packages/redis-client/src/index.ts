@@ -1,11 +1,11 @@
 import { createClient, RedisClientType } from "redis";
-import "dotenv";
+import "dotenv/config";
 
 // Declare a singleton variable for the Redis client
 let redisClient: RedisClientType | null = null;
 
 // Function to initialize and return the Redis client
-const getRedisClient = (): RedisClientType => {
+export const getRedisClient = (): RedisClientType => {
     if (!redisClient) {
         // Create the Redis client if not already created
         const redisUrl = process.env.REDIS_URL;
@@ -26,5 +26,3 @@ const getRedisClient = (): RedisClientType => {
 
     return redisClient;
 };
-
-export default getRedisClient;

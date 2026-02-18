@@ -1,24 +1,25 @@
 {
   "name": "websocket",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "type": "module",
   "scripts": {
     "dev": "tsc -b && node dist/index.js",
     "build": "tsc -b",
     "start": "node dist/index.js"
   },
   "keywords": [],
-  "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@repo/db": "*",
     "@repo/redis-client": "*",
+    "@repo/shared-types": "*",
     "dotenv": "^17.2.3",
     "ws": "^8.18.0",
     "youtube-search-api": "^1.2.2"
   },
   "devDependencies": {
+    "@repo/typescript-config": "*",
     "@types/ws": "^8.18.1"
   }
 }

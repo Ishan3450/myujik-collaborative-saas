@@ -1,18 +1,23 @@
 "use client";
 
-import { Loader2Icon, Music } from "lucide-react";
-import { signIn, signOut, useSession } from "next-auth/react";
-import Link from "next/link";
-import { Button } from "./ui/button";
-import { usePathname, useRouter } from "next/navigation";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Input } from "./ui/input";
 import { useRef } from "react";
+
+import { signIn, signOut, useSession } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+
+import { Loader2Icon, Music } from "lucide-react";
+
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
 
 export function AppBar(): JSX.Element {
   const session = useSession();
   const router = useRouter();
   const currPath = usePathname();
+
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   return (

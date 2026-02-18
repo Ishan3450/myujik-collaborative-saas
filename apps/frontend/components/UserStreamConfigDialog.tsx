@@ -1,3 +1,13 @@
+"use client"
+
+import { Dispatch, SetStateAction } from "react";
+
+import { useRouter } from "next/navigation";
+
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+
 /**
  * UserStreamConfigDialog component
  * 
@@ -9,21 +19,6 @@
  * Named this component as UserStreamConfigDialog as in future
  * I am planning to add stream related configuration.
  */
-"use client"
-
-import { Button } from "@/components/ui/button"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
-import { useRouter } from "next/navigation";
-import { Dispatch, SetStateAction } from "react"
-
-
 interface UserStreamConfigDialogProps {
     showDialog: boolean;
     setShowDialog: Dispatch<SetStateAction<boolean>>;
