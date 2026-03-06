@@ -12,7 +12,6 @@
   "license": "ISC",
   "dependencies": {
     "@repo/db": "*",
-    "@repo/redis-client": "*",
     "@repo/shared-types": "*",
     "dotenv": "^17.2.3",
     "ws": "^8.18.0",

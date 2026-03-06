@@ -60,10 +60,6 @@ https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
      │    │   └── schema.prisma  # File defining the models of the database
      │    │
      │    └── index.ts           # Prisma Singleton Class
-     │
-     └── redis-client/          # Redis cache
-         │
-         └── index.ts           # Redis Singleton Class
 ```
 
 ---
@@ -80,7 +76,6 @@ https://github.com/user-attachments/assets/61db59ab-56d3-4c6c-a9ba-544fd5542d7c
 - [Turborepo](https://turbo.build/) for mono repo and system build orchestrator.
 - [WS](https://www.npmjs.com/package/ws) for websocket communication.
 - [Prisma](https://www.prisma.io/) as ORM with PostgreSQL database.
-- [Redis](https://redis.io/) as cache.
 
 ---
 

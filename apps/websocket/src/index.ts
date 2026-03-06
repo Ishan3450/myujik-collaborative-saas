@@ -1,5 +1,4 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { getRedisClient } from "@repo/redis-client";
 import "dotenv/config";
 import type { Song, SongExtended, ClientMessage, ServerMessage } from "@repo/shared-types";
 import sendWebsocketMessage from "./lib/websocket.js";
@@ -8,7 +7,6 @@ import sendWebsocketMessage from "./lib/websocket.js";
 import youtubesearchapi from "youtube-search-api";
 
 
-const redisClient = getRedisClient();
 const PORT = parseInt(process.env.WS_PORT ?? "8080", 10);
 const wss = new WebSocketServer({ port: PORT });
 
@@ -54,24 +52,8 @@ wss.on("connection", (ws: WebSocket) => {
                     userSocketMap.set(parsed.id, ws);
                 }
 
-                // fetch any previous unplayed songs' list if there
-                let songsList: Song[], previouslyPlayedSongs: Song[];
-                try {
-                    const streamExists = await redisClient.exists(`stream:${parsed.id}`);
-                    if (streamExists === 1) {
-                        const songsListInStringForm = await redisClient.hGet(`stream:${parsed.id}`, "songsList");
-                        const songsHistoryInStringForm = await redisClient.hGet(`stream:${parsed.id}`, "songsHistory");
-                        songsList = songsListInStringForm ? JSON.parse(songsListInStringForm) : [];
-                        previouslyPlayedSongs = songsHistoryInStringForm ? JSON.parse(songsHistoryInStringForm) : [];
-                    } else {
-                        songsList = [];
-                        previouslyPlayedSongs = [];
-                    }
-                } catch (error) {
-                    console.log(error);
-                    songsList = [];
-                    previouslyPlayedSongs = [];
-                }
+                const songsList: Song[] = [];
+                const previouslyPlayedSongs: Song[] = [];
 
                 // check if room is already there or not from the roomUsersMap
                 // if not then create the room and add the curr user socket to the roomUsersmap
@@ -96,8 +78,6 @@ wss.on("connection", (ws: WebSocket) => {
             case "owner_ended_stream": {
                 console.log(`Closing stream for ${parsed.roomId}`);
 
-                saveSongListToCache(parsed.roomId, parsed.songs);
-                saveSongHistoryToCache(parsed.roomId, parsed.previouslyPlayedSongs);
                 roomCurrentPlayingSongMap.delete(parsed.roomId);
 
                 const roomUsers = roomUsersMap.get(parsed.roomId);
@@ -295,9 +275,6 @@ function broadcastToRoomUsers(roomId: string, updateCurrentPlayingSong: SongExte
         return logAndReturnWarning(`[BROADCAST] Song history not found for roomId: ${roomId}`);
     }
 
-    saveSongListToCache(roomId, songsList);
-    saveSongHistoryToCache(roomId, previouslyPlayedSongs);
-
     const obj: ServerMessage = {
         type: "update_list",
         songs: songsList,
@@ -352,23 +329,5 @@ function cleanupSocket(ws: WebSocket, roomId: string | null = null, logs: boolea
         roomSongsMap.delete(roomId);
         roomSongsHistoryMap.delete(roomId);
         roomCurrentPlayingSongMap.delete(roomId);
-    }
-}
-
-// type of songs must be a string, so call a JSON.stringify for songs while calling
-async function saveSongListToCache(roomId: string, songs: Song[]) {
-    try {
-        await redisClient.hSet(`stream:${roomId}`, "songsList", JSON.stringify(songs));
-        console.log("Saved list of songs to cache");
-    } catch (error) {
-        console.log("Error while saving songs in cache: ", error);
-    }
-}
-async function saveSongHistoryToCache(roomId: string, history: Song[]) {
-    try {
-        await redisClient.hSet(`stream:${roomId}`, "songsHistory", JSON.stringify(history));
-        console.log("Saved list of previously played songs to cache");
-    } catch (error) {
-        console.log("Error while saving songs history in cache: ", error);
     }
 }
