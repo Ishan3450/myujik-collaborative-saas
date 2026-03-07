@@ -11,7 +11,6 @@
   "keywords": [],
   "license": "ISC",
   "dependencies": {
-    "@repo/db": "*",
     "@repo/shared-types": "*",
     "dotenv": "^17.2.3",
     "ws": "^8.18.0",

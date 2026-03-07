@@ -50,8 +50,8 @@ export default function MusicStreamParticipant({
       });
       toast.success("Leaving stream");
     }
-    router.push("/");
     websocketCleanup();
+    router.push("/");
   }
 
   const { ws, websocketCleanup } = useWebsocket({
@@ -76,9 +76,11 @@ export default function MusicStreamParticipant({
       }
 
       if (message.type === "left_room") {
+        websocketCleanup();
         setSongs([]);
         setCurrentlyPlaying(null);
-        leaveRoom();
+        toast.success("Stream Ended");
+        router.push("/");
       }
 
       if (message.type === "song_queue_concluded") {
@@ -98,6 +100,7 @@ export default function MusicStreamParticipant({
       <UserStreamConfigDialog
         showDialog={showDialog}
         setShowDialog={setShowDialog}
+        leaveRoom={leaveRoom}
       />
 
       {!showDialog && (
