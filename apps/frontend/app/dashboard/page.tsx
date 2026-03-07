@@ -72,12 +72,12 @@ export default function MusicStreamOwner() {
       }
 
       if (message.type === "left_room") {
+        websocketCleanup();
         isLoadingNextSong.current = false;
         setSongs([]);
         setCurrentlyPlaying(null);
         toast.success("Stream Ended");
         router.push("/");
-        leaveRoom();
       }
 
       if (message.type === "song_queue_concluded") {
@@ -121,18 +121,6 @@ export default function MusicStreamOwner() {
       handlePlayNext();
     }
   }, [currentlyPlaying, handlePlayNext, songs]);
-
-  const leaveRoom = () => {
-    const userId = session.data?.user?.id;
-    if (streamId && userId) {
-      sendWebsocketMessage(ws, {
-        type: "leave_room",
-        roomId: streamId,
-        id: userId,
-      });
-    }
-    websocketCleanup();
-  }
 
   return (
     <div className="container mx-auto p-4">

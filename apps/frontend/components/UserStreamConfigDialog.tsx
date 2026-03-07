@@ -2,8 +2,6 @@
 
 import { Dispatch, SetStateAction } from "react";
 
-import { useRouter } from "next/navigation";
-
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -22,17 +20,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 interface UserStreamConfigDialogProps {
     showDialog: boolean;
     setShowDialog: Dispatch<SetStateAction<boolean>>;
+    leaveRoom: () => void;
 }
 
-export default function UserStreamConfigDialog({ showDialog, setShowDialog }: UserStreamConfigDialogProps) {
-    const router = useRouter();
-
+export default function UserStreamConfigDialog({ showDialog, setShowDialog, leaveRoom }: UserStreamConfigDialogProps) {
     const handleConfirm = () => {
         setShowDialog(false);
     }
-
     const handleCancel = () => {
-        router.push('/');
+        leaveRoom();
     }
 
     return (

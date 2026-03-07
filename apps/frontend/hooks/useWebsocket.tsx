@@ -81,7 +81,15 @@ export default function useWebsocket({ role, streamId, onMessageHandler, onBefor
 
             window.removeEventListener("beforeunload", onBeforeUnloadHandler);
         }
-    }, [onBeforeUnloadHandler, onMessageHandler, role, router, session, streamId]);
+
+        // The exhaustive-deps rule is disabled intentionally:
+        // We do not want to add onBeforeUnloadHandler and onMessageHandler as dependencies.
+        // - onMessageHandler cannot be included safely because it references websocketCleanup,
+        //   which is exported from this hook, making dependency management circular.
+        // This ensures stable refs and avoids unnecessary effect reruns.
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [role, session.status, streamId]);
 
     async function startWsConnection() {
         return new Promise<void>((resolve, reject) => {

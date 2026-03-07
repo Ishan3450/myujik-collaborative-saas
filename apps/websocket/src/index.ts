@@ -78,8 +78,6 @@ wss.on("connection", (ws: WebSocket) => {
             case "owner_ended_stream": {
                 console.log(`Closing stream for ${parsed.roomId}`);
 
-                roomCurrentPlayingSongMap.delete(parsed.roomId);
-
                 const roomUsers = roomUsersMap.get(parsed.roomId);
                 if (!roomUsers) {
                     return logAndReturnWarning(`[OWNER ENDED STREAM] Room users not found for roomId: ${parsed.roomId}`);
@@ -88,13 +86,8 @@ wss.on("connection", (ws: WebSocket) => {
                     sendWebsocketMessage(user, {
                         type: "left_room",
                     });
+                    cleanupSocket(user, parsed.roomId, true);
                 });
-                /**
-                 * Here not calling: roomUsersMap.delete(parsed.roomId);
-                 * 
-                 * Reason: it will trigger follow up event of leave_room and at there if we delete this then users
-                 * will not be found there and there will be unnecessary sockets lying in the userSocketMap.
-                 */
                 break;
             }
             case "join_room": {
@@ -290,6 +283,14 @@ function logAndReturnWarning(message: string): void {
     console.warn(message);
 }
 
+/**
+ * Cleans up a disconnected user from all data structures.
+ *
+ * Performs cleanup in this order:
+ * 1. Removes user from userSocketMap
+ * 2. Removes user from their room in roomUsersMap
+ * 3. If room is empty, deletes all room-related data
+ */
 function cleanupSocket(ws: WebSocket, roomId: string | null = null, logs: boolean = true) {
     let roomUsers: Set<WebSocket> | undefined = undefined;
     let userId: string | null = null;
