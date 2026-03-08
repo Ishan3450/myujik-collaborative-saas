@@ -31,7 +31,7 @@ export default function PreviouslyPlayedSongsList({ children, previouslyPlayedSo
                                     className="flex items-center space-x-4 mb-2 border rounded-lg px-4"
                                 >
                                     <Image
-                                        src={song.extractedThumbnail}
+                                        src={song.extractedThumbnail || "/thumbnail_fallback.png"}
                                         alt={song.extractedName}
                                         className="object-contain rounded"
                                         width={80}

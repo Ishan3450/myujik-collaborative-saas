@@ -2,9 +2,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import "dotenv/config";
 import type { Song, SongExtended, ClientMessage, ServerMessage } from "@repo/shared-types";
 import sendWebsocketMessage from "./lib/websocket.js";
-
-// @ts-ignore
-import youtubesearchapi from "youtube-search-api";
+import { getVideoDetail } from "./lib/youtube.js";
 
 
 const PORT = parseInt(process.env.WS_PORT ?? "8080", 10);
@@ -134,27 +132,12 @@ wss.on("connection", (ws: WebSocket) => {
                     return logAndReturnWarning(`[ADD SONG] Duplicate song request`);
                 }
 
-                let videoDetails;
-                try {
-                    videoDetails = await youtubesearchapi.GetVideoDetails(extractedId);
-                } catch (error) {
-                    console.error("Failed to fetch video details:", error);
-                    break;
-                }
-
-                // add the song in the songs map
-                if (
-                    videoDetails &&
-                    videoDetails.title &&
-                    videoDetails.thumbnail &&
-                    Array.isArray(videoDetails.thumbnail.thumbnails) &&
-                    videoDetails.thumbnail.thumbnails.length > 0 &&
-                    videoDetails.thumbnail.thumbnails[0].url
-                ) {
+                const videoDetails = await getVideoDetail(extractedId);
+                if (videoDetails) {
                     roomSongs.push({
                         extractedId,
                         extractedName: videoDetails.title,
-                        extractedThumbnail: videoDetails.thumbnail.thumbnails[0].url,
+                        extractedThumbnail: videoDetails.thumbnailUrl,
                         addedBy: parsed.addedBy,
                         votes: [],
                     });
@@ -162,7 +145,7 @@ wss.on("connection", (ws: WebSocket) => {
                     // broadcast to all the users the updated list
                     broadcastToRoomUsers(parsed.roomId);
                 } else {
-                    console.log("Invalid video details received from API.");
+                    console.log("Invalid video details received from API for ID:", extractedId);
                 }
                 break;
             }

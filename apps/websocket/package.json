@@ -11,10 +11,10 @@
   "keywords": [],
   "license": "ISC",
   "dependencies": {
+    "@googleapis/youtube": "^31.0.0",
     "@repo/shared-types": "*",
     "dotenv": "^17.2.3",
-    "ws": "^8.18.0",
-    "youtube-search-api": "^1.2.2"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",

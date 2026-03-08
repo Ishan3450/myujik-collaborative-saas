@@ -36,7 +36,7 @@ yarn-error.log*
 .DS_Store
 *.pem
 
-**/.tsbuildinfo
+**/*.tsbuildinfo
 
 # Upcoming Features plan :)
 upcoming-features.txt

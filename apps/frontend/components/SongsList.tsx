@@ -50,7 +50,7 @@ export default function SongsList({ ws, userId, streamId, songsList, songsListRe
                         className="flex items-center space-x-4 mb-4"
                     >
                         <Image
-                            src={song.extractedThumbnail}
+                            src={song.extractedThumbnail || "/thumbnail_fallback.png"}
                             alt={song.extractedName}
                             className="object-contain rounded"
                             width={80}
