@@ -16,10 +16,11 @@ import SongsList from "@/components/SongsList";
 import PreviouslyPlayedSongsList from "@/components/PreviouslyPlayedSongsList";
 import SuggestSong from "@/components/SuggestSong";
 import { sortSongsByVotes } from "@/lib/song";
-
-import type { Song, SongExtended, ServerMessage } from "@repo/shared-types";
 import useWebsocket from "@/hooks/useWebsocket";
 import { sendWebsocketMessage } from "@/lib/websocket";
+import WebsocketConnectionLoader from "@/components/ui/websocket-connection-loader";
+
+import type { Song, SongExtended, ServerMessage } from "@repo/shared-types";
 
 
 export default function MusicStreamParticipant({
@@ -54,7 +55,7 @@ export default function MusicStreamParticipant({
     router.push("/");
   }
 
-  const { ws, websocketCleanup } = useWebsocket({
+  const { ws, websocketCleanup, status } = useWebsocket({
     role: "participant",
     streamId: streamId,
     onBeforeUnloadHandler: leaveRoom,
@@ -95,64 +96,86 @@ export default function MusicStreamParticipant({
 
   const sortedSongs = useMemo(() => sortSongsByVotes(songs), [songs])
 
+  useEffect(() => {
+    if (status === "error") {
+      toast.error("Something went wrong.");
+      router.replace("/");
+    }
+  }, [router, status]);
+
+  if (status === "error") {
+    return null;
+  }
+
   return (
     <div className="container mx-auto px-4 py-3">
-      <UserStreamConfigDialog
-        showDialog={showDialog}
-        setShowDialog={setShowDialog}
-        leaveRoom={leaveRoom}
-      />
+      {status === "connecting" && (
+        <WebsocketConnectionLoader
+          title="Finding the stream..."
+          subtitle="Connecting to the stream. Hang tight, this won't take long."
+        />
+      )}
 
-      {!showDialog && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left column: List of songs */}
-          <SongsList
-            ws={ws}
-            userId={session.data?.user?.id}
-            streamId={streamId}
-            songsList={sortedSongs}
-            songsListRef={songsRef}
+      {status === "connected" && (
+        <>
+          <UserStreamConfigDialog
+            showDialog={showDialog}
+            setShowDialog={setShowDialog}
+            leaveRoom={leaveRoom}
           />
 
-          {/* Right column: Controls and currently playing */}
-          <div className="space-y-3">
-            <SuggestSong
-              ws={ws}
-              roomId={streamId}
-              suggestedBy={session.data?.user?.name}
-            />
+          {!showDialog && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left column: List of songs */}
+              <SongsList
+                ws={ws}
+                userId={session.data?.user?.id}
+                streamId={streamId}
+                songsList={sortedSongs}
+                songsListRef={songsRef}
+              />
 
-            <Card className="p-4">
-              <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
-              {currentlyPlaying ? (
-                <YouTubeEmbed
-                  currentlyPlaying={currentlyPlaying}
-                  setCurrentlyPlaying={setCurrentlyPlaying}
-                  websocket={ws}
-                  streamId={streamId}
+              {/* Right column: Controls and currently playing */}
+              <div className="space-y-3">
+                <SuggestSong
+                  ws={ws}
+                  roomId={streamId}
+                  suggestedBy={session.data?.user?.name}
                 />
-              ) : (
-                <p>No song is currently playing</p>
-              )}
-            </Card>
 
-            {/* action buttons */}
-            <div className="flex space-x-2">
-              <ShareButton streamId={streamId} className="flex-1" />
+                <Card className="p-4">
+                  <h2 className="text-2xl font-bold mb-2">Currently Playing</h2>
+                  {currentlyPlaying ? (
+                    <YouTubeEmbed
+                      currentlyPlaying={currentlyPlaying}
+                      setCurrentlyPlaying={setCurrentlyPlaying}
+                      websocket={ws}
+                      streamId={streamId}
+                    />
+                  ) : (
+                    <p>No song is currently playing</p>
+                  )}
+                </Card>
 
-              <Button className="flex-1 border-red-400 text-red-600 hover:text-red-600" variant={"outline"} onClick={leaveRoom}>
-                <DoorOpenIcon />
-                Leave Stream
-              </Button>
+                {/* action buttons */}
+                <div className="flex space-x-2">
+                  <ShareButton streamId={streamId} className="flex-1" />
 
-              <PreviouslyPlayedSongsList previouslyPlayedSongs={previouslyPlayedSongs}>
-                <Button variant={"outline"} className="flex-1 border-blue-500 text-blue-500 hover:text-white hover:bg-blue-600">
-                  <HistoryIcon className="h-4 w-4" /> History
-                </Button>
-              </PreviouslyPlayedSongsList>
+                  <Button className="flex-1 border-red-400 text-red-600 hover:text-red-600" variant={"outline"} onClick={leaveRoom}>
+                    <DoorOpenIcon />
+                    Leave Stream
+                  </Button>
+
+                  <PreviouslyPlayedSongsList previouslyPlayedSongs={previouslyPlayedSongs}>
+                    <Button variant={"outline"} className="flex-1 border-blue-500 text-blue-500 hover:text-white hover:bg-blue-600">
+                      <HistoryIcon className="h-4 w-4" /> History
+                    </Button>
+                  </PreviouslyPlayedSongsList>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
