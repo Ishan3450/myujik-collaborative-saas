@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -16,6 +16,8 @@ interface UseWebsocketParams {
 }
 
 export default function useWebsocket({ role, streamId, onMessageHandler, onBeforeUnloadHandler }: UseWebsocketParams) {
+    const [status, setStatus] = useState<"connecting" | "connected" | "error">("connecting");
+    const isManualClose = useRef<boolean>(false);
     const session = useSession();
     const router = useRouter();
 
@@ -44,9 +46,9 @@ export default function useWebsocket({ role, streamId, onMessageHandler, onBefor
                 try {
                     await startWsConnection();
                 } catch {
-                    toast.error("Failed to establish WebSocket connection.");
                     return;
                 }
+
                 messageHandlerRef.current = (event: MessageEvent) => {
                     try {
                         onMessageHandler(JSON.parse(event.data));
@@ -92,42 +94,48 @@ export default function useWebsocket({ role, streamId, onMessageHandler, onBefor
     }, [role, session.status, streamId]);
 
     async function startWsConnection() {
+        isManualClose.current = false;
         return new Promise<void>((resolve, reject) => {
             try {
                 const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
                 if (!wsUrl) {
-                    toast.error("Something went wrong from our side");
+                    setStatus("error");
                     reject(new Error("WebSocket URL not found"));
                     return;
                 }
                 ws.current = new WebSocket(wsUrl);
 
                 ws.current.onopen = () => {
+                    setStatus("connected");
                     resolve();
                 };
 
                 ws.current.onerror = (error) => {
+                    setStatus("error");
                     console.error("WebSocket connection error:", error);
-                    toast.error("Failed to connect to stream server");
                     reject(error);
                 };
 
                 ws.current.onclose = () => {
                     console.log("WebSocket connection closed");
+                    if (!isManualClose.current) {
+                        setStatus("error");
+                    }
                 };
             } catch (error) {
+                setStatus("error");
                 console.error("Error creating WebSocket:", error);
-                toast.error("Failed to create stream connection");
                 reject(error);
             }
         });
     }
 
     function websocketCleanup() {
+        isManualClose.current = true;
         ws.current?.removeEventListener("message", messageHandlerRef.current);
         ws.current?.close();
         ws.current = null;
     }
 
-    return { ws, websocketCleanup };
+    return { ws, websocketCleanup, status };
 }
