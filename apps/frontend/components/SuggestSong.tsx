@@ -28,7 +28,6 @@ export default function SuggestSong({ ws, roomId, suggestedBy }: SuggestSongProp
             const videoId = youtubeurl.extractId(youtubeLink);
             sendWebsocketMessage(ws, {
                 type: "add_song",
-                roomId: roomId,
                 addedBy: suggestedBy,
                 extractedId: videoId,
             });

@@ -1,8 +1,8 @@
 {
   "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
-    "emitDeclarationOnly": true /* Only output d.ts files and not JavaScript files. */,
     "rootDir": "./src",
+    "outDir": "./dist",
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"],

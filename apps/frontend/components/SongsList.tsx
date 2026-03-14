@@ -35,7 +35,6 @@ export default function SongsList({ ws, userId, streamId, songsList, songsListRe
         sendWebsocketMessage(ws, {
             type: "update_songs_list",
             songs: newSongList,
-            roomId: streamId,
         });
     };
 

@@ -46,8 +46,6 @@ export default function MusicStreamParticipant({
     if (userId) {
       sendWebsocketMessage(ws, {
         type: "leave_room",
-        roomId: streamId,
-        id: userId,
       });
       toast.success("Leaving stream");
     }
@@ -80,7 +78,7 @@ export default function MusicStreamParticipant({
         websocketCleanup();
         setSongs([]);
         setCurrentlyPlaying(null);
-        toast.success("Stream Ended");
+        toast.success(message.reason);
         router.push("/");
       }
 

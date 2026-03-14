@@ -13,6 +13,7 @@
   "dependencies": {
     "@googleapis/youtube": "^31.0.0",
     "@repo/shared-types": "*",
+    "@repo/db": "*",
     "dotenv": "^17.2.3",
     "ws": "^8.18.0"
   },
