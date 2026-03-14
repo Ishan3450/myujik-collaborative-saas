@@ -183,7 +183,6 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
 
         sendWebsocketMessage(websocket, {
             type: "song_state_play",
-            roomId: streamId,
             songResumedTime: songResumedTime,
         });
     }
@@ -193,7 +192,6 @@ export function YouTubeEmbed({ currentlyPlaying, setCurrentlyPlaying, handlePlay
 
         sendWebsocketMessage(websocket, {
             type: "song_state_pause",
-            roomId: streamId,
         });
     }
 

@@ -43,10 +43,7 @@ export default function MusicStreamOwner() {
     if (!streamId) return;
 
     sendWebsocketMessage(ws, {
-      type: "owner_ended_stream",
-      roomId: streamId,
-      songs: songsRef.current,
-      previouslyPlayedSongs: previouslyPlayedSongsRef.current,
+      type: "owner_ended_room",
     });
   }
 
@@ -77,7 +74,7 @@ export default function MusicStreamOwner() {
         isLoadingNextSong.current = false;
         setSongs([]);
         setCurrentlyPlaying(null);
-        toast.success("Stream Ended");
+        toast.success(message.reason);
         router.push("/");
       }
 
@@ -104,14 +101,12 @@ export default function MusicStreamOwner() {
       sendWebsocketMessage(ws, {
         type: "play_next_song",
         songToPlay: nextSong,
-        roomId: streamId,
         updatedList: newList,
         updatedHistory: updatedHistory,
       });
     } else if (!sortedSongs.length && currentlyPlaying) {
       sendWebsocketMessage(ws, {
         type: "song_queue_concluded",
-        roomId: streamId,
       });
     }
   }, [currentlyPlaying, sortedSongs, streamId, ws]);
