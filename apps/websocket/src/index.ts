@@ -255,11 +255,10 @@ wss.on("connection", (ws: WebSocket) => {
     });
 
     ws.on("message", async (data) => {
-        _logMessageSize(data);
-
         let parsed: ClientMessage;
         try {
             parsed = JSON.parse(data.toString()); // toString() because data type is object and contains <Buffer ...> data
+            _logMessageSize(data, parsed.type);
         } catch (error) {
             console.error("Failed to parse WebSocket message:", error);
             return;
@@ -484,12 +483,12 @@ function logAndReturnWarning(message: string): void {
     console.warn(message);
 }
 
-function _logMessageSize(data: RawData) {
+function _logMessageSize(data: RawData, messageType: string) {
     const sizeInBytes = Buffer.byteLength(data as unknown as string, 'utf8')
     const sizeInKB = sizeInBytes / 1024
     const sizeInMB = sizeInKB / 1024
 
-    console.log(`[MESSAGE SIZE] Size: ${sizeInBytes} bytes / ${sizeInKB.toFixed(2)} KB / ${sizeInMB.toFixed(4)} MB`)
+    console.log(`[MESSAGE SIZE] Type: ${messageType}, Size: ${sizeInBytes} bytes / ${sizeInKB.toFixed(2)} KB / ${sizeInMB.toFixed(4)} MB`)
 }
 
 /**
