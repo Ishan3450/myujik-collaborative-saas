@@ -3,9 +3,32 @@
   "ui": "stream",
   "tasks": {
     "build": {
+      "dependsOn": ["^build"]
+    },
+    "frontend#build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": [
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "NEXTAUTH_URL",
+        "NEXTAUTH_SECRET",
+        "NEXT_PUBLIC_WS_URL",
+        "DATABASE_URL"
+      ]
+    },
+
+    "websocket#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"],
+      "env": [
+        "WS_PORT",
+        "YOUTUBE_API_KEY",
+        "ALLOWED_ORIGINS",
+        "DATABASE_URL"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
