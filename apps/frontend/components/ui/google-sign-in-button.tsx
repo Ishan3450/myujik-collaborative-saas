@@ -8,7 +8,7 @@ type GoogleSignInButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 export function GoogleSignInButton({
   className,
   loading,
-  children = "Sign in with Google",
+  children = "Sign In",
   disabled,
   ...props
 }: GoogleSignInButtonProps) {

@@ -174,7 +174,7 @@ export default function MusicStreamOwner() {
             </Card>
 
             {/* action buttons */}
-            <div className="flex space-x-2">
+            <div className="grid grid-cols-2 xl:flex xl:space-x-2 gap-2">
               <Button onClick={handlePlayNext} className="flex-1">
                 <Play className="h-4 w-4" /> Play Next
               </Button>

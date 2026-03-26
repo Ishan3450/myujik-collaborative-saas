@@ -27,7 +27,7 @@ export default function useWebsocket({ role, streamId, onMessageHandler, onBefor
     useEffect(() => {
         if (
             session.status === "loading"
-            || !streamId
+            || (role === "participant" && !streamId)
             || ws.current?.readyState === WebSocket.OPEN
             || ws.current?.readyState === WebSocket.CONNECTING
         ) return;

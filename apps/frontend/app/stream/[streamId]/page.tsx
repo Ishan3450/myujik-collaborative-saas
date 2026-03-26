@@ -156,7 +156,7 @@ export default function MusicStreamParticipant({
                 </Card>
 
                 {/* action buttons */}
-                <div className="flex space-x-2">
+                <div className="grid grid-cols-2 xl:flex xl:space-x-2 gap-2">
                   <ShareButton streamId={streamId} className="flex-1" />
 
                   <Button className="flex-1 border-red-400 text-red-600 hover:text-red-600" variant={"outline"} onClick={leaveRoom}>

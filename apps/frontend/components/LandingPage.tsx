@@ -7,7 +7,7 @@ import { SiteFooter } from "@/components/ui/site-footer";
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-col min-h-screen items-center">
+    <div className="flex flex-col min-h-screen items-center px-5">
       <main className="flex flex-col gap-8 mt-4">
         <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48 bg-black text-white rounded-xl">
           <div className="container px-4 md:px-6">

@@ -57,8 +57,8 @@ export function AppBar(): JSX.Element {
   }
 
   return (
-    <header className="px-4 lg:px-6 h-14 flex items-center">
-      <Link className="flex items-center justify-center gap-2" href="/">
+    <header className="px-4 lg:px-6 min-h-14 flex items-center flex-col sm:flex-row">
+      <Link className="flex items-center justify-center gap-2 my-4 md:my-2" href="/">
         <Image
           src="/icon.png"
           alt="Myujik Logo"
@@ -68,15 +68,15 @@ export function AppBar(): JSX.Element {
         />
         <span className="font-bold">Myujik</span>
       </Link>
-      <nav className="ml-auto flex gap-4 sm:gap-6 items-center">
+      <nav className="sm:ml-auto flex gap-4 sm:gap-6 items-center flex-wrap justify-center">
         <Link
-          className="text-sm font-medium hover:underline underline-offset-4"
+          className="text-sm font-medium underline-offset-2 underline hidden md:inline-block"
           href="/#features"
         >
           Features
         </Link>
         <Link
-          className="text-sm font-medium hover:underline underline-offset-4"
+          className="text-sm font-medium underline-offset-2 underline hidden md:inline-block"
           href="/#how-it-works"
         >
           How It Works
@@ -85,7 +85,7 @@ export function AppBar(): JSX.Element {
           {session.status === "loading" ? (
             <Loader2Icon className="animate-spin" aria-label="Loading authentication status" />
           ) : session.status === "authenticated" && session.data?.user ? (
-            <div className="flex gap-3">
+            <div className="flex gap-1 sm:gap-3">
               {currPath !== "/dashboard" && (
                 <Button
                   className="bg-gray-800 py-2 px-4 rounded-lg"
